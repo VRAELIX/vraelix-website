@@ -1,0 +1,4 @@
+[functions.submit-enquiry]
+# Public website enquiries do not have a Supabase Auth user JWT. The function
+# performs explicit origin, Turnstile, rate-limit, and payload checks instead.
+verify_jwt = false

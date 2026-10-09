@@ -1,0 +1,451 @@
+{
+  "services": [
+    {
+      "slug": "website-development",
+      "name": "Website Development",
+      "related": [
+        "business-websites",
+        "landing-pages",
+        "seo-performance"
+      ],
+      "summary": "Thoughtful websites shaped around your business, your audience and the work you need the site to do.",
+      "who": "Businesses ready for a clearer, more capable digital presence.",
+      "helps": "Bring your story, services and next step together in one considered experience.",
+      "deliver": "Planning, page structure, responsive design, development and launch support, scoped to the project.",
+      "faqs": [
+        [
+          "What does website development include?",
+          "It can include discovery, site structure, visual design, development, content guidance, testing and launch. The exact scope is agreed around your goals."
+        ],
+        [
+          "How long does a website take to build?",
+          "Timing depends on the number of pages, features, content readiness and review cycles. VRAELIX confirms a realistic timeline after understanding the brief."
+        ],
+        [
+          "Can an existing website be improved?",
+          "Yes. A project can focus on redesign, accessibility, performance, content structure or a specific set of improvements."
+        ]
+      ]
+    },
+    {
+      "slug": "business-websites",
+      "name": "Business & Corporate Websites",
+      "related": [
+        "website-development",
+        "landing-pages",
+        "ecommerce"
+      ],
+      "summary": "A structured business website that helps people understand what you do, who you help and how to take the next step.",
+      "who": "Small and growing businesses, professional teams and organisations.",
+      "helps": "Make essential information easier to find and your offer easier to understand.",
+      "deliver": "A clear page system for your story, services, expertise and enquiries, shaped to your audience.",
+      "faqs": [
+        [
+          "What makes a business website effective?",
+          "It answers the visitor’s key questions quickly: what the business does, who it helps, why the offer matters and what to do next."
+        ],
+        [
+          "Can a corporate site grow over time?",
+          "Yes. A well-planned structure can make room for new services, content and capabilities without forcing a complete rebuild."
+        ],
+        [
+          "Do you write the website content?",
+          "Content support can be included in the agreed scope. We begin by clarifying the message and the information each page needs."
+        ]
+      ]
+    },
+    {
+      "slug": "ecommerce",
+      "name": "E-commerce Solutions",
+      "related": [
+        "website-development",
+        "business-websites",
+        "seo-performance"
+      ],
+      "summary": "An online store planned around your products, customer journey and day-to-day operations.",
+      "who": "Businesses that want to sell products or services online.",
+      "helps": "Connect product discovery, useful information and a straightforward route to purchase.",
+      "deliver": "Store structure, product and collection layouts, responsive storefront design and the agreed platform setup.",
+      "faqs": [
+        [
+          "Can you build a new online store?",
+          "Yes. The right approach depends on your catalogue, operations and preferred platform. We scope those needs before recommending a build."
+        ],
+        [
+          "Can you improve an existing store?",
+          "Yes. Work can focus on navigation, product pages, mobile usability or specific parts of the shopping journey."
+        ],
+        [
+          "Do you guarantee sales?",
+          "No. Sales depend on many factors beyond a website. VRAELIX focuses on a considered storefront and a clear customer experience."
+        ]
+      ]
+    },
+    {
+      "slug": "landing-pages",
+      "name": "Landing Pages & Conversion Experiences",
+      "related": [
+        "website-development",
+        "seo-performance",
+        "ecommerce"
+      ],
+      "summary": "Focused digital pages that give a campaign, offer or product a clear place to land.",
+      "who": "Teams promoting a specific offer, launch, event or campaign.",
+      "helps": "Keep attention on the message and the action that matters for that visitor.",
+      "deliver": "A concise page structure, responsive layout, message hierarchy and enquiry or action flow.",
+      "faqs": [
+        [
+          "When should I use a landing page?",
+          "A focused landing page can help when a campaign has one audience, one message and one main action."
+        ],
+        [
+          "Can a landing page connect to an existing campaign?",
+          "Yes. It can be planned to work with your current website, campaign assets and measurement setup."
+        ],
+        [
+          "Is conversion guaranteed?",
+          "No. The page can make the offer and action clearer, while campaign fit, audience and timing also influence results."
+        ]
+      ]
+    },
+    {
+      "slug": "seo-performance",
+      "name": "SEO & Performance",
+      "related": [
+        "website-development",
+        "business-websites",
+        "maintenance"
+      ],
+      "summary": "Technical and on-page improvements that make a website easier to find, understand and use.",
+      "who": "Businesses improving an existing website or preparing a new one for discovery.",
+      "helps": "Address structural, content and speed issues that can create friction for people and search systems.",
+      "deliver": "A scoped review of technical foundations, semantics, internal links, image handling, accessibility and page performance.",
+      "faqs": [
+        [
+          "What does SEO work cover?",
+          "SEO can include crawl and index basics, page titles and descriptions, heading structure, internal links, image alternatives and useful content aligned to search intent."
+        ],
+        [
+          "Can SEO guarantee a first-page ranking?",
+          "No. Search visibility depends on competition, authority, content quality, technical health and factors outside any single provider’s control."
+        ],
+        [
+          "Do you work on website speed?",
+          "Yes. Performance can be reviewed as part of a new build or a separate improvement scope."
+        ]
+      ]
+    },
+    {
+      "slug": "maintenance",
+      "name": "Website Maintenance & Optimization",
+      "related": [
+        "seo-performance",
+        "website-development",
+        "custom-solutions"
+      ],
+      "summary": "Practical upkeep and improvements to keep a website current, usable and aligned with changing needs.",
+      "who": "Teams that need ongoing technical care or a steady stream of considered updates.",
+      "helps": "Reduce avoidable friction as content, tools and business needs change.",
+      "deliver": "A maintenance or optimization scope agreed around your platform, priorities and preferred cadence.",
+      "faqs": [
+        [
+          "What can website maintenance include?",
+          "Depending on the platform and scope, it can include content updates, routine checks, software updates, backups and small improvements."
+        ],
+        [
+          "Can you maintain a website built by another team?",
+          "Often, yes. We first review the site, its platform and access needs to understand what support is appropriate."
+        ],
+        [
+          "Is maintenance a fixed package?",
+          "The scope can be shaped around the site and the support you need. Details are agreed before work begins."
+        ]
+      ]
+    },
+    {
+      "slug": "automation",
+      "name": "Business Automation",
+      "related": [
+        "custom-solutions",
+        "website-development",
+        "business-websites"
+      ],
+      "summary": "Explore practical ways to connect repetitive tasks and information flows across your business.",
+      "who": "Teams looking to reduce manual steps or improve how information moves between tools.",
+      "helps": "Map a repeatable process, identify friction and scope a suitable automation approach.",
+      "deliver": "A discovery-led engagement to understand the workflow, tools, constraints and a sensible next step.",
+      "faqs": [
+        [
+          "What kinds of processes can be automated?",
+          "Common candidates are repeatable, rules-based tasks such as routing enquiries, updating records or moving information between tools. Each workflow needs to be assessed."
+        ],
+        [
+          "Do you already offer a specific automation product?",
+          "No single product is assumed. The tools and approach are chosen around the process and your existing systems."
+        ],
+        [
+          "Can automation remove all manual work?",
+          "No. Automation can support defined steps, but people still need visibility, exception handling and appropriate control."
+        ]
+      ]
+    },
+    {
+      "slug": "custom-solutions",
+      "name": "Custom Digital Solutions",
+      "related": [
+        "automation",
+        "website-development",
+        "business-websites"
+      ],
+      "summary": "A considered path for digital requirements that do not fit neatly into a standard website or tool.",
+      "who": "Businesses with a specific product, system or customer-experience need.",
+      "helps": "Turn an early idea or operational challenge into a clear, scoped digital direction.",
+      "deliver": "Initial problem framing and a project approach based on the people, systems and constraints involved.",
+      "faqs": [
+        [
+          "What counts as a custom digital solution?",
+          "It could be a tailored web experience, a business tool or a connection between existing systems. The right shape depends on the need."
+        ],
+        [
+          "Can you scope an idea that is still early?",
+          "Yes. A first conversation can clarify the intended users, problem, constraints and what a useful first version might include."
+        ],
+        [
+          "Do you build every type of software?",
+          "No. VRAELIX assesses fit and scope before recommending a project, and does not claim capability beyond what can be delivered responsibly."
+        ]
+      ]
+    }
+  ],
+  "pages": [
+    [
+      "/",
+      "VRAELIX — Digital Experiences, Business Systems & Technology",
+      "VRAELIX is a digital technology and solutions brand building thoughtful digital experiences, business systems and technology solutions around real business needs.",
+      "home"
+    ],
+    [
+      "/about/",
+      "About VRAELIX | Thoughtful Digital Solutions",
+      "Learn how VRAELIX approaches digital experiences, business systems and technology solutions with business purpose, clarity and care.",
+      "about"
+    ],
+    [
+      "/services/",
+      "Services | Digital, Website & Business Solutions",
+      "Explore VRAELIX services: website development, business websites, e-commerce, landing pages, SEO and performance, maintenance, automation and custom digital solutions.",
+      "services"
+    ],
+    [
+      "/process/",
+      "Our Process | How VRAELIX Works",
+      "See how VRAELIX moves from understanding a business need to shaping, building and handing over a thoughtful digital solution.",
+      "process"
+    ],
+    [
+      "/insights/",
+      "Insights | Practical Digital Guidance from VRAELIX",
+      "Practical notes from VRAELIX on business websites, automation and digital project planning. Clear answers for better digital decisions.",
+      "insights"
+    ],
+    [
+      "/contact/",
+      "Contact VRAELIX | Start a Project Conversation",
+      "Contact VRAELIX about a website, business system, e-commerce experience, automation or custom digital solution. Start with one considered project brief.",
+      "contact"
+    ],
+    [
+      "/request-a-quote/",
+      "Request a Quote | Start a VRAELIX Project",
+      "Share your project requirements with VRAELIX using one simple brief for website development, e-commerce, SEO, automation and custom solutions.",
+      "quote"
+    ],
+    [
+      "/thank-you/",
+      "Thank You | VRAELIX Project Brief",
+      "Your VRAELIX project brief is ready. Review it and continue through a verified contact channel to send your enquiry.",
+      "thank"
+    ],
+    [
+      "/privacy/",
+      "Privacy Policy | VRAELIX",
+      "Learn how the VRAELIX website handles project brief information, browser session storage and links to external contact channels.",
+      "legal"
+    ],
+    [
+      "/terms/",
+      "Terms of Use | VRAELIX",
+      "Read the terms for using VRAELIX website information and initiating a project enquiry.",
+      "legal"
+    ],
+    [
+      "/cookie-policy/",
+      "Cookie Policy | VRAELIX",
+      "Understand cookies and browser storage used by the VRAELIX website.",
+      "legal"
+    ],
+    [
+      "/disclaimer/",
+      "Disclaimer | VRAELIX",
+      "Important information about VRAELIX website content, service descriptions and project outcomes.",
+      "legal"
+    ]
+  ],
+  "faqs": [
+    [
+      "What does VRAELIX do?",
+      "VRAELIX builds thoughtful digital experiences and business systems around real business needs. Current services include websites, e-commerce, SEO and performance, maintenance, automation and custom digital solutions."
+    ],
+    [
+      "How do I choose the right service?",
+      "Start with the change you need. VRAELIX can help clarify the problem, audience and desired outcome before recommending a scope."
+    ],
+    [
+      "Do you work with businesses of different sizes?",
+      "VRAELIX can discuss projects with businesses and teams at different stages. Fit depends on the need, scope and delivery approach."
+    ]
+  ],
+  "insights": [
+    [
+      "Planning",
+      "What should a business website make clear?",
+      "A visitor should be able to understand the offer, recognise whether it fits and find a next step. Start by listing the questions customers ask before they contact you. Then make sure the most useful answers appear where people expect them.",
+      "Business & Corporate Websites",
+      "/services/business-websites/"
+    ],
+    [
+      "Technology",
+      "When is business automation worth exploring?",
+      "Look for work that repeats, follows clear rules and moves information between known steps. Map the process first, including exceptions and handoffs. Automation is a good candidate when it makes that flow simpler without removing necessary judgement.",
+      "Business Automation",
+      "/services/automation/"
+    ],
+    [
+      "Discovery",
+      "How do you scope a digital project with confidence?",
+      "Describe the person who needs the change, the friction they face and what would be different if the work succeeds. A clear problem statement gives the team a way to prioritise features, estimate effort and decide what can wait.",
+      "Custom Digital Solutions",
+      "/services/custom-solutions/"
+    ]
+  ],
+  "insightFaqs": [
+    [
+      "What are VRAELIX Insights?",
+      "Short, practical notes about digital experiences, business systems and the decisions involved in shaping them."
+    ],
+    [
+      "Are these case studies?",
+      "No. The notes share general guidance. They do not describe client projects or results."
+    ],
+    [
+      "How often are Insights updated?",
+      "New notes are added when there is useful, considered guidance to share."
+    ]
+  ],
+  "legal": {
+    "privacy": [
+      "Privacy",
+      [
+        [
+          "How information is handled",
+          "This static website has no VRAELIX-hosted database. When you submit the Request a Quote form, your browser sends the enquiry details to Zapier. VRAELIX has configured Zapier to route those enquiries to Google Sheets for follow-up. The website uses browser storage for the privacy preference and a temporary copy used by the confirmation page. It does not use analytics or advertising pixels."
+        ],
+        [
+          "Information you may enter",
+          "The form asks for your name, email address, phone number, requested service, project description, budget, timeline and preferred contact method. Company or business name is optional. Please include only information needed to respond to your enquiry."
+        ],
+        [
+          "Browser storage and confirmation",
+          "After the form receives a successful response, the browser keeps a temporary sessionStorage copy of the submitted brief so the Thank You page can show the confirmation details. This copy remains in the current tab session and is not sent again from storage. A separate essential-only localStorage preference remembers your privacy choice and contains no personal information."
+        ],
+        [
+          "Third-party processing",
+          "The form sends submitted information to Zapier, which VRAELIX uses to route enquiry records to Google Sheets. Zapier and Google handle information under their own terms and privacy practices. The VRAELIX website does not control those providers’ retention periods or settings."
+        ],
+        [
+          "Retention and requests",
+          "The website does not set a retention period for enquiry records in Zapier or Google Sheets. VRAELIX should review and manage retention in those connected accounts. To ask about an enquiry or request its deletion, contact vraelix29@gmail.com."
+        ],
+        [
+          "Privacy preference",
+          "The privacy preference is stored in browser localStorage so the notice does not appear on every page load. It contains no personal information. You can reopen the notice from the footer at any time."
+        ],
+        [
+          "External contact services",
+          "Links to LinkedIn, Instagram or other external services are governed by those providers’ own privacy practices. VRAELIX does not control how those services handle information."
+        ]
+      ]
+    ],
+    "terms": [
+      "Terms",
+      [
+        [
+          "Using this website",
+          "This website provides general information about VRAELIX and its digital services. Website content does not create a service agreement, guarantee availability or replace a written project scope."
+        ],
+        [
+          "Project agreements",
+          "A project begins only when the parties agree the specific scope, responsibilities, timeline and commercial terms in writing. Information and estimates depend on the details provided and may change as the scope is clarified."
+        ],
+        [
+          "Acceptable use",
+          "You may use website content for personal and business research. Do not misuse the website, attempt to interfere with its operation or misrepresent VRAELIX content as your own."
+        ],
+        [
+          "Third-party services",
+          "The site may link to third-party services. VRAELIX is not responsible for their content, availability or terms."
+        ],
+        [
+          "Getting in touch",
+          "To discuss a project, use the project brief or a verified contact option shown on the website."
+        ]
+      ]
+    ],
+    "cookie-policy": [
+      "Cookie policy",
+      [
+        [
+          "Cookies and browser storage",
+          "The VRAELIX website does not set analytics, advertising or personalisation cookies. It uses essential browser localStorage to remember the privacy preference and sessionStorage to keep a temporary copy of a successfully submitted enquiry for the Thank You page."
+        ],
+        [
+          "Privacy preference",
+          "The preference stores only an essential-only setting so the notice does not appear on every page load. It contains no personal information. You can reopen the notice from the footer to review the current settings."
+        ],
+        [
+          "Enquiry submission",
+          "SessionStorage itself is not sent to a server. When you submit the form, your browser sends the enquiry details to Zapier, which VRAELIX uses to route the enquiry into Google Sheets. After the form receives a successful response, a temporary copy of the submitted brief remains in the current tab session so the Thank You page can show the confirmation details."
+        ],
+        [
+          "Third-party services",
+          "Zapier and Google process submitted enquiry information under their own terms and privacy practices. External links may also use their own cookies or storage when you visit those services."
+        ],
+        [
+          "Retention",
+          "The website does not set the retention period for enquiry records in Zapier or Google Sheets. VRAELIX should review and manage retention in those connected accounts."
+        ]
+      ]
+    ],
+    "disclaimer": [
+      "Disclaimer",
+      [
+        [
+          "Information on this website",
+          "The website describes VRAELIX services in general terms. It is intended to help visitors understand possible project directions and is not a promise that a particular feature, schedule or outcome is available."
+        ],
+        [
+          "Project outcomes",
+          "Project scope, approach, cost and timing depend on the specific requirements and will be discussed and agreed separately. No search position, sales outcome or business result is guaranteed."
+        ],
+        [
+          "Information changes",
+          "Technology, browsers, search systems and third-party services change. Information is provided in good faith but may need updating as the context changes."
+        ],
+        [
+          "Questions",
+          "Use the contact page to discuss the fit of a service for your situation. A written project agreement governs any work undertaken."
+        ]
+      ]
+    ]
+  }
+}

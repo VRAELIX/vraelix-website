@@ -1,0 +1,64 @@
+name: Publish VRAELIX to GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VRAELIX_GA4_MEASUREMENT_ID: ${{ vars.VRAELIX_GA4_MEASUREMENT_ID }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure GitHub Pages URL and repository path
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repository="${GITHUB_REPOSITORY#*/}"
+          owner_lower="$(printf '%s' "$owner" | tr '[:upper:]' '[:lower:]')"
+          repository_lower="$(printf '%s' "$repository" | tr '[:upper:]' '[:lower:]')"
+          site_origin="https://${owner_lower}.github.io"
+          base_path=""
+          if [[ "$repository_lower" != "${owner_lower}.github.io" ]]; then
+            base_path="/${repository}"
+          fi
+          printf 'VRAELIX_SITE_ORIGIN=%s\n' "$site_origin" >> "$GITHUB_ENV"
+          printf 'VRAELIX_GH_PAGES_BASE_PATH=%s\n' "$base_path" >> "$GITHUB_ENV"
+
+      - name: Build and audit static artifact
+        run: python work/build_github_pages.py
+
+      - name: Configure Pages artifact
+        uses: actions/configure-pages@v5
+
+      - name: Upload static artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: github-pages
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Publish artifact to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,33 @@
+# Local credentials and environment configuration
+.env
+.env.*
+!.env.example
+/supabase/functions/.env
+/supabase/.temp/
+
+# This generated browser config contains the configured public Zapier hook.
+# Supply VRAELIX_ZAPIER_WEBHOOK_URL at build/deploy time instead of committing it.
+/outputs/vraelix-premium-site/assets/site-config.js
+
+# Locally prepared GitHub Pages artifact. The workflow builds this in CI.
+/github-pages/
+/github-pages-prepared/
+
+# Local rollback copy of the current Zapier integration; never publish or commit it.
+/work/local-backups/
+
+# Local one-off analysis, conversion and machine-specific utilities
+/work/__pycache__/
+/work/transcode.html
+/work/vraelix-mobile-media.zip
+/work/vraelix-silent-media.zip
+/work/logo-preview.jpg
+/work/media_probe.py
+/work/logo_rows.py
+/work/extract_contacts.py
+/work/check_media.py
+
+# Common local editor/OS artifacts
+.DS_Store
+Thumbs.db
+*.swp
