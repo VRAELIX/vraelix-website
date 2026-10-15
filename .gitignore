@@ -9,6 +9,9 @@
 # Supply VRAELIX_ZAPIER_WEBHOOK_URL at build/deploy time instead of committing it.
 /outputs/vraelix-premium-site/assets/site-config.js
 
+# Local-only Supabase staging preview output; never publish or commit it.
+/outputs/vraelix-staging-preview/
+
 # Locally prepared GitHub Pages artifact. The workflow builds this in CI.
 /github-pages/
 /github-pages-prepared/

@@ -176,6 +176,15 @@ def parse_headers_file() -> tuple[str, dict[str, str]]:
     return csp, headers
 
 
+def check_stylesheet_source() -> None:
+    source = Path("work/assets/site.css")
+    generated = ROOT / "assets/site.css"
+    if not source.is_file():
+        errors.append("Authoritative stylesheet source is missing from work/assets/site.css")
+    elif not generated.is_file() or source.read_bytes() != generated.read_bytes():
+        errors.append("Generated stylesheet does not match work/assets/site.css")
+
+
 def check_site_origin() -> None:
     global ORIGIN
     home = Page()
@@ -421,6 +430,19 @@ def check_form_security(pages: dict[str, Page]) -> None:
     for expected in ("/functions/v1/submit-enquiry", "turnstile_token", "result.success !== true"):
         if expected not in supabase_adapter:
             errors.append(f"Supabase browser adapter is missing {expected!r}")
+    function_path = Path("supabase/functions/submit-enquiry/index.ts")
+    if not function_path.is_file():
+        errors.append("Supabase submit-enquiry Edge Function source is missing")
+    else:
+        function_source = function_path.read_text(encoding="utf-8")
+        service_match = re.search(r"const ALLOWED_SERVICES = new Set\(\[(.*?)\]\);", function_source, re.DOTALL)
+        if not service_match or "ALLOWED_SERVICES.has(service)" not in function_source:
+            errors.append("Supabase Edge Function must validate service against an explicit allowlist")
+        else:
+            server_services = set(re.findall(r'"((?:\\.|[^"\\])*)"', service_match.group(1)))
+            expected_services = {service["name"] for service in DATA["services"]} | {"Other", "Not sure yet"}
+            if server_services != expected_services:
+                errors.append("Supabase Edge Function service allowlist must match the visitor form options")
     if "function submitEnquiry" not in dispatcher:
         errors.append("A modular submitEnquiry(payload) dispatcher is missing")
     for adapter in ("zapier-adapter.js", "supabase-adapter.js", "enquiry-adapter.js"):
@@ -436,11 +458,21 @@ def check_form_security(pages: dict[str, Page]) -> None:
         errors.append("Zapier URL should come from the isolated build-time environment configuration")
     config = (ROOT / "assets/site-config.js").read_text(encoding="utf-8")
     measurement_id = config_value(config, "ga4MeasurementId")
+    staging_test_mode = bool(re.search(r'^\s*enquiryStagingTestMode:\s*true\s*,?$', config, re.MULTILINE))
+    staging_output = ROOT.resolve() == Path("outputs/vraelix-staging-preview").resolve()
+    if staging_test_mode:
+        staging_url = urlsplit(config_value(config, "supabaseUrl"))
+        if not staging_output or staging_url.hostname != "fqgrdfxboskdyqaipabr.supabase.co" or not config_value(config, "turnstileSiteKey"):
+            errors.append("Staging form test mode may only be enabled in the configured Staging preview with a public Turnstile site key")
+    if not re.search(r'^\s*enquiryBackendVerified:\s*false\s*,?$', config, re.MULTILINE):
+        errors.append("Enquiry backend must remain unverified until an approved end-to-end test is complete")
     if "zapierWebhookUrl: \"\"" not in config and "zapierWebhookUrl: \"https://hooks.zapier.com/" not in config:
         errors.append("Generated configuration should contain either an empty Zapier placeholder or a Catch Hook URL")
     submit = next((attrs for tag, attrs in quote.tags if tag == "button" and attrs.get("type") == "submit"), {})
-    if "disabled" not in submit:
-        errors.append("Enquiry submit button must stay disabled until browser code configures the Catch Hook")
+    if "disabled" not in submit and not staging_test_mode:
+        errors.append("Enquiry submit button must stay disabled until an approved backend verification")
+    if 'config.enquiryBackendVerified === true' not in js:
+        errors.append("Browser submission must require the explicit backend verification gate")
     if "dd.textContent = brief" not in js or "brief.full_name" not in js:
         errors.append("Stored enquiry content must be inserted as text, not executable markup")
     response_index = js.find("receipt.success !== true")
@@ -701,6 +733,7 @@ def main():
     parser.add_argument("--base-url", help="Optional running preview URL for HTTP status and header verification")
     args = parser.parse_args()
     check_site_origin()
+    check_stylesheet_source()
     parse_headers_file()
     pages, _ = check_pages()
     check_form_security(pages)

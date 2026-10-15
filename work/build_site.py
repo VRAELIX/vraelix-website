@@ -1,6 +1,7 @@
 from pathlib import Path
 from html import escape
 import base64
+import hashlib
 import json
 import os
 import re
@@ -8,6 +9,7 @@ import shutil
 from urllib.parse import urlsplit
 
 DEFAULT_ROOT = Path("outputs/vraelix-premium-site")
+STAGING_PREVIEW_ROOT = Path("outputs/vraelix-staging-preview")
 ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", str(DEFAULT_ROOT)))
 WORKSPACE = Path.cwd().resolve()
 if ROOT.is_absolute():
@@ -17,13 +19,14 @@ else:
 if ROOT == WORKSPACE or WORKSPACE not in ROOT.parents:
     raise ValueError("VRAELIX_BUILD_OUTPUT must stay inside the project workspace")
 IS_DEFAULT_OUTPUT = ROOT == (WORKSPACE / DEFAULT_ROOT).resolve()
+IS_STAGING_PREVIEW = ROOT == (WORKSPACE / STAGING_PREVIEW_ROOT).resolve()
 DATA = json.loads(Path("work/site_data.json").read_text(encoding="utf-8"))
 SERVICES = DATA["services"]
 EMAIL = "vraelix29@gmail.com"
 INSTAGRAM = "https://www.instagram.com/mrofficial_ansh"
 LINKEDIN = "https://www.linkedin.com/company/vraelix"
 
-LOCAL_BUILD_ENV = Path(".env.local")
+LOCAL_BUILD_ENV = Path(".env.staging.local" if IS_STAGING_PREVIEW else ".env.local")
 BUILD_ENV_KEYS = {
     "VRAELIX_SITE_ORIGIN",
     "VRAELIX_GH_PAGES_BASE_PATH",
@@ -33,6 +36,8 @@ BUILD_ENV_KEYS = {
     "VRAELIX_SUPABASE_PUBLISHABLE_KEY",
     "VRAELIX_ENQUIRY_BACKEND",
     "VRAELIX_TURNSTILE_SITE_KEY",
+    "VRAELIX_STAGING_FORM_TEST_MODE",
+    "VRAELIX_INDEXING_APPROVED",
 }
 
 
@@ -56,6 +61,18 @@ def load_local_build_env():
 
 
 load_local_build_env()
+
+INDEXING_APPROVAL_VALUE = os.environ.get("VRAELIX_INDEXING_APPROVED", "").strip().lower()
+if INDEXING_APPROVAL_VALUE not in ("", "true", "false"):
+    raise ValueError("VRAELIX_INDEXING_APPROVED must be true or false")
+INDEXING_APPROVED = INDEXING_APPROVAL_VALUE == "true" and not IS_STAGING_PREVIEW
+
+STAGING_FORM_TEST_MODE_VALUE = os.environ.get("VRAELIX_STAGING_FORM_TEST_MODE", "").strip().lower()
+if STAGING_FORM_TEST_MODE_VALUE not in ("", "true", "false"):
+    raise ValueError("VRAELIX_STAGING_FORM_TEST_MODE must be true or false")
+STAGING_FORM_TEST_MODE_REQUESTED = STAGING_FORM_TEST_MODE_VALUE == "true"
+if STAGING_FORM_TEST_MODE_REQUESTED and not IS_STAGING_PREVIEW:
+    raise ValueError("Staging form test mode is limited to outputs/vraelix-staging-preview")
 
 
 def previous_generated_config_value(name):
@@ -127,19 +144,24 @@ def configured_ga4_measurement_id():
 
 
 def configured_enquiry_backend():
-    backend = os.environ.get("VRAELIX_ENQUIRY_BACKEND", "zapier").strip().lower() or "zapier"
+    backend = os.environ.get("VRAELIX_ENQUIRY_BACKEND", "supabase").strip().lower() or "supabase"
     if backend not in {"zapier", "supabase"}:
         raise ValueError("VRAELIX_ENQUIRY_BACKEND must be either zapier or supabase")
     site_key = os.environ.get("VRAELIX_TURNSTILE_SITE_KEY", "").strip()
     if site_key and not re.fullmatch(r"[A-Za-z0-9_-]{10,200}", site_key):
         raise ValueError("VRAELIX_TURNSTILE_SITE_KEY has an invalid format")
-    if backend == "supabase" and (not SUPABASE_PROJECT_URL or not SUPABASE_PUBLISHABLE_KEY or not site_key):
-        raise ValueError("Supabase form mode requires the public Supabase settings and a Turnstile site key")
+    if backend == "supabase" and (not SUPABASE_PROJECT_URL or not SUPABASE_PUBLISHABLE_KEY):
+        raise ValueError("Supabase mode requires VRAELIX_SUPABASE_URL and VRAELIX_SUPABASE_PUBLISHABLE_KEY")
+    if backend == "supabase" and (ENQUIRY_BACKEND_VERIFIED or STAGING_FORM_TEST_MODE_REQUESTED) and not site_key:
+        raise ValueError("A verified Supabase form requires VRAELIX_TURNSTILE_SITE_KEY")
     return backend, site_key
 
 SITE_ORIGIN = configured_site_origin()
 SITE_BASE_PATH = configured_site_base_path()
 GA4_MEASUREMENT_ID = configured_ga4_measurement_id()
+# Keep the visitor form closed until a backend has passed an approved
+# end-to-end verification. Re-enable only through a reviewed source change.
+ENQUIRY_BACKEND_VERIFIED = False
 
 
 def site_url(path):
@@ -147,6 +169,11 @@ def site_url(path):
         return ""
     normalized_path = path if path.startswith("/") else "/" + path
     return SITE_ORIGIN + SITE_BASE_PATH + normalized_path
+
+
+def site_path(path):
+    normalized_path = path if path.startswith("/") else "/" + path
+    return SITE_BASE_PATH + normalized_path
 
 
 def configured_zapier_webhook():
@@ -180,9 +207,33 @@ def configured_zapier_webhook():
     return value
 
 
-ZAPIER_WEBHOOK_URL = configured_zapier_webhook()
 SUPABASE_PROJECT_URL, SUPABASE_PUBLISHABLE_KEY = configured_supabase_public_settings()
 ENQUIRY_BACKEND, TURNSTILE_SITE_KEY = configured_enquiry_backend()
+STAGING_PROJECT_REF = "fqgrdfxboskdyqaipabr"
+
+
+def configured_staging_form_test_mode():
+    if not STAGING_FORM_TEST_MODE_REQUESTED:
+        return False
+    parsed = urlsplit(SUPABASE_PROJECT_URL)
+    if (
+        not IS_STAGING_PREVIEW
+        or ENQUIRY_BACKEND != "supabase"
+        or parsed.scheme != "https"
+        or parsed.hostname != f"{STAGING_PROJECT_REF}.supabase.co"
+        or not SUPABASE_PUBLISHABLE_KEY
+        or not TURNSTILE_SITE_KEY
+        or SITE_ORIGIN
+    ):
+        raise ValueError(
+            "Staging form test mode requires the separate staging output, the approved staging Supabase project, "
+            "public staging keys, and no production site origin"
+        )
+    return True
+
+
+STAGING_FORM_TEST_MODE = configured_staging_form_test_mode()
+ZAPIER_WEBHOOK_URL = configured_zapier_webhook() if ENQUIRY_BACKEND_VERIFIED and ENQUIRY_BACKEND == "zapier" else ""
 
 def esc(value):
     return escape(str(value), quote=True)
@@ -217,14 +268,14 @@ def header(active):
     links = "".join(f'<a href="{url}"'+(' aria-current="page"' if active == url else '')+f'>{name}</a>' for url, name in nav)
     return f'''<a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header" data-site-header><div class="header-inner wrap">
-<a class="brand" href="/" aria-label="VRAELIX home"><img class="brand-light" src="/assets/logo-wordmark-white.png" alt="VRAELIX"><img class="brand-dark" src="/assets/logo-wordmark-black.png" alt="VRAELIX"></a>
+<a class="brand" href="/" aria-label="VRAELIX home"><picture class="brand-picture brand-light"><source type="image/webp" srcset="/assets/brand/vraelix-logo-white.webp"><img src="/assets/brand/vraelix-logo-white.png" alt="VRAELIX" width="1490" height="613" fetchpriority="high" decoding="async"></picture><picture class="brand-picture brand-dark"><source type="image/webp" srcset="/assets/brand/vraelix-logo.webp"><img src="/assets/brand/vraelix-logo.png" alt="VRAELIX" width="1490" height="613" fetchpriority="high" decoding="async"></picture></a>
 <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Open navigation" data-menu-toggle><span></span><span></span></button>
 <nav class="primary-nav" id="primary-nav" aria-label="Main navigation" data-primary-nav>{links}<a class="nav-cta" href="/request-a-quote/">Start a project <span aria-hidden="true">↗</span></a></nav>
 </div></header>'''
 
 def footer():
     return '''<footer class="site-footer"><div class="wrap footer-top">
-<div class="footer-brand-col"><a class="brand footer-brand" href="/" aria-label="VRAELIX home"><img src="/assets/logo-wordmark-white.png" alt="VRAELIX"></a><p>Thoughtful digital experiences, business systems and technology solutions around real business needs.</p><div class="footer-social" data-social-links aria-label="Social links"></div></div>
+<div class="footer-brand-col"><a class="brand footer-brand" href="/" aria-label="VRAELIX home"><picture class="brand-picture"><source type="image/webp" srcset="/assets/brand/vraelix-logo-white.webp"><img src="/assets/brand/vraelix-logo-white.png" alt="VRAELIX" width="1490" height="613" loading="lazy" decoding="async"></picture></a><p>Thoughtful digital experiences, business systems and technology solutions around real business needs.</p><div class="footer-social" data-social-links aria-label="Social links"></div></div>
 <div class="footer-column"><h2>Company</h2><a href="/about/">About</a><a href="/process/">Process</a><a href="/insights/">Insights</a><a href="/contact/">Contact</a></div>
 <div class="footer-column"><h2>Services</h2><a href="/services/website-development/">Website development</a><a href="/services/business-websites/">Business websites</a><a href="/services/ecommerce/">E-commerce</a><a href="/services/seo-performance/">SEO &amp; performance</a><a href="/services/automation/">Business automation</a><a href="/services/">All services</a></div>
 <div class="footer-column"><h2>Resources</h2><a href="/request-a-quote/">Request a quote</a><a href="/insights/">Guides &amp; notes</a><h2 class="footer-legal-title">Legal</h2><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="/cookie-policy/">Cookie policy</a><a href="/disclaimer/">Disclaimer</a></div>
@@ -256,7 +307,7 @@ def consent_panel():
 </aside>'''
 
 def page_intro(section, label, heading, copy):
-    return f'''<section class="page-hero" aria-labelledby="page-title"><div class="wrap page-hero-grid"><div><p class="eyebrow">{esc(section)} <span class="eyebrow-divider">/</span> {esc(label)}</p><h1 id="page-title">{heading}</h1></div><div class="page-hero-side"><p>{copy}</p></div></div><div class="page-hero-rule" aria-hidden="true"></div></section>'''
+    return f'''<section class="page-hero" aria-labelledby="page-title"><div class="wrap page-hero-grid"><div><p class="eyebrow">{esc(section)} <span class="eyebrow-divider" aria-hidden="true">/</span> {esc(label)}</p><h1 id="page-title">{heading}</h1></div><div class="page-hero-side"><p>{copy}</p></div></div><div class="page-hero-rule" aria-hidden="true"></div></section>'''
 
 def cta_band(kicker, heading, copy):
     return f'''<section class="cta-band"><div class="wrap cta-band-inner"><div><p class="eyebrow">{esc(kicker)}</p><h2>{heading}</h2><p>{copy}</p></div><a class="button button-light" href="/request-a-quote/">Start a project <span aria-hidden="true">↗</span></a></div></section>'''
@@ -276,7 +327,7 @@ def render_home():
 <div class="wrap hero-bottom"><span>A modern digital technology &amp; solutions brand</span><span class="hero-scroll">Scroll to explore <span aria-hidden="true">↓</span></span></div></section>
 <section class="intro-strip section"><div class="wrap intro-grid"><p class="eyebrow">The VRAELIX point of view</p><div><h2>Good technology starts with <em>understanding.</em></h2><p>We bring design, technology and business purpose together—so each digital decision has a reason to be there.</p><a class="text-link" href="/about/">More about VRAELIX <span aria-hidden="true">↗</span></a></div></div></section>
 <section class="section services-home" aria-labelledby="services-heading"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">What we do</p><h2 id="services-heading">Digital work,<br><em>with direction.</em></h2></div><p>Start with the business need. Find the right digital response. Build with room to grow.</p></div><div class="service-grid">{cards}</div><div class="section-foot"><a class="text-link" href="/services/">Explore all services <span aria-hidden="true">↗</span></a></div></div></section>
-<section class="section founder-home" aria-labelledby="founder-heading"><div class="wrap founder-grid"><div class="founder-photo-stack"><img class="founder-main" src="/assets/founder-work.webp" alt="VRAELIX founder working at a laptop in a light-filled office" loading="lazy" width="1086" height="1448"><img class="founder-detail" src="/assets/founder-coffee.webp" alt="VRAELIX founder taking a quiet moment between work" loading="lazy" width="1086" height="1448"><span class="photo-caption">A considered start. A bigger direction.</span></div><div class="founder-copy"><p class="eyebrow">Ansh Kumar · Founder &amp; CEO</p><h2 id="founder-heading">Built with a clear point of <em>view.</em></h2><p>VRAELIX began with a simple belief: digital work should make sense for the business behind it. That means listening first, making thoughtful choices and building something useful for the people who rely on it.</p><p>Today, websites are an important part of that work. They are also a foundation for a wider set of digital, creative and technology solutions as real needs emerge.</p><a class="text-link" href="/about/">Our story <span aria-hidden="true">↗</span></a></div></div></section>
+<section class="section founder-home" aria-labelledby="founder-heading"><div class="wrap founder-grid"><div class="founder-photo-stack"><div class="founder-photo-pair"><img class="founder-main" src="/assets/founder-work.webp" alt="VRAELIX founder working at a laptop in a light-filled office" loading="lazy" width="1086" height="1448"><img class="founder-detail" src="/assets/founder-coffee.webp" alt="VRAELIX founder taking a quiet moment between work" loading="lazy" width="1086" height="1448"></div><span class="photo-caption">A considered start. A bigger direction.</span></div><div class="founder-copy"><p class="eyebrow">Ansh Kumar · Founder &amp; CEO</p><h2 id="founder-heading">Built with a clear point of <em>view.</em></h2><p>VRAELIX began with a simple belief: digital work should make sense for the business behind it. That means listening first, making thoughtful choices and building something useful for the people who rely on it.</p><p>Today, websites are an important part of that work. They are also a foundation for a wider set of digital, creative and technology solutions as real needs emerge.</p><a class="text-link" href="/about/">Our story <span aria-hidden="true">↗</span></a></div></div></section>
 <section class="section process-preview" aria-labelledby="process-heading"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">How we work</p><h2 id="process-heading">A thoughtful route<br>from need to <em>next step.</em></h2></div><a class="text-link" href="/process/">Explore the process <span aria-hidden="true">↗</span></a></div><div class="steps-grid"><article class="step"><span>01</span><h3>Understand</h3><p>Start with the people, context and business need behind the request.</p></article><article class="step"><span>02</span><h3>Shape</h3><p>Agree the right scope, priorities and practical path forward.</p></article><article class="step"><span>03</span><h3>Build</h3><p>Make, review and refine the experience with care and clarity.</p></article><article class="step"><span>04</span><h3>Move forward</h3><p>Launch with a clear handover and space for what comes next.</p></article></div></div></section>
 <section class="section insight-preview" aria-labelledby="insight-heading"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">Notes for better decisions</p><h2 id="insight-heading">A clearer view of<br><em>digital work.</em></h2></div><a class="text-link" href="/insights/">Visit insights <span aria-hidden="true">↗</span></a></div><div class="insight-grid">{insight_cards}</div></div></section>
 {cta_band("The next step","Let’s make the brief clearer.","Tell us what you are trying to improve or build. We’ll start with the need and shape the right conversation.")}'''
@@ -316,20 +367,29 @@ def render_contact():
 def quote_form():
     options = "".join(f'<option>{esc(s["name"])}</option>' for s in SERVICES)
     configured = (
-        bool(SUPABASE_PROJECT_URL and SUPABASE_PUBLISHABLE_KEY and TURNSTILE_SITE_KEY)
-        if ENQUIRY_BACKEND == "supabase" else bool(ZAPIER_WEBHOOK_URL)
+        (ENQUIRY_BACKEND_VERIFIED or STAGING_FORM_TEST_MODE) and (
+            bool(SUPABASE_PROJECT_URL and SUPABASE_PUBLISHABLE_KEY and TURNSTILE_SITE_KEY)
+            if ENQUIRY_BACKEND == "supabase" else bool(ZAPIER_WEBHOOK_URL)
+        )
     )
-    disabled = " disabled"
+    disabled = "" if configured else " disabled"
     if configured:
         feedback = "This form needs JavaScript to send your enquiry. Please email VRAELIX if this message persists."
         privacy_copy = (
+            "This local staging preview targets the separate VRAELIX staging database. Use synthetic details only. "
+            if STAGING_FORM_TEST_MODE else
             "Submitting sends your information to VRAELIX so we can respond to your project enquiry. "
             if ENQUIRY_BACKEND == "supabase" else
             "Submitting sends your information to Zapier, which routes it to VRAELIX so we can respond. "
         )
+        staging_notice = (
+            '<p class="form-feedback" role="note">STAGING TEST ONLY — use synthetic details. This preview sends to the separate staging project, not production.</p>'
+            if STAGING_FORM_TEST_MODE else ""
+        )
     else:
-        feedback = f'This form is not connected yet. Your details are not sent. Please <a href="mailto:{esc(EMAIL)}">email VRAELIX</a> or try again later.'
-        privacy_copy = "This form is not connected yet and will not send your details. "
+        feedback = f'Online enquiries cannot currently be submitted. Your details will not be sent. Please <a href="mailto:{esc(EMAIL)}">email VRAELIX</a> instead.'
+        privacy_copy = ""
+        staging_notice = ""
     return f'''<form class="project-form" method="post" novalidate data-project-form>
 <input type="hidden" name="source" value="VRAELIX Website"><input type="hidden" name="submitted_at" value="">
 <div class="form-heading"><p class="eyebrow">Project brief</p><p>Fields marked <span aria-hidden="true">*</span> are required. Share enough context to make the first conversation useful.</p></div>
@@ -345,17 +405,76 @@ def quote_form():
 <div class="form-field"><label for="timeline">Timeline <span class="optional">Optional</span></label><input id="timeline" name="timeline" type="text" maxlength="120" placeholder="e.g. planning, soon, flexible"></div>
 </div>
 <div data-turnstile-slot hidden><div data-turnstile-widget></div></div>
-<p class="form-privacy">{privacy_copy}Read our <a href="/privacy/">Privacy Policy</a> and <a href="/cookie-policy/">Cookie Policy</a>.</p><button class="button button-dark" type="submit"{disabled}>Send project enquiry <span aria-hidden="true">↗</span></button><p class="form-feedback" data-form-feedback aria-live="polite" role="status">{feedback}</p></form>'''
+{staging_notice}<p class="form-privacy">{privacy_copy}Read our <a href="/privacy/">Privacy Policy</a> and <a href="/cookie-policy/">Cookie Policy</a>.</p><p class="form-feedback" id="form-feedback" data-form-feedback aria-live="polite" role="status">{feedback}</p><button class="button button-dark" type="submit" aria-describedby="form-feedback"{disabled}>Send project enquiry <span aria-hidden="true">↗</span></button></form>'''
 
 def render_quote():
     return page_intro("Start a project", "Request a quote", "Good work begins<br>with a clear <em>brief.</em>", "Share what you have in mind. We’ll use your answers to understand the need and prepare a useful next conversation.") + f'''<section class="section quote-section"><div class="wrap quote-grid"><div class="quote-aside"><p class="eyebrow">A little context helps</p><h2>What are you<br>trying to <em>change?</em></h2><p>Tell us what is in place today, what feels difficult and what a better experience or process could make possible.</p><div class="quote-aside-note"><span>01</span><p>One brief for all VRAELIX services</p></div><div class="quote-aside-note"><span>02</span><p>Budget and timing are optional</p></div><div class="quote-aside-note"><span>03</span><p>Choose how you would like us to follow up</p></div></div><div class="quote-form-wrap">{quote_form()}</div></div></section>'''
 
 def render_thankyou():
-    return page_intro("Project brief", "Thank you", "A clearer next step<br>starts <em>here.</em>", "Complete the project enquiry form to share the details VRAELIX needs to respond.") + '''<section class="section thankyou-section"><div class="wrap thankyou-grid"><div class="thankyou-mark" aria-hidden="true">V.</div><div class="thankyou-content"><p class="eyebrow">Project enquiry</p><h2 data-thanks-title>No enquiry has been sent yet.</h2><div class="brief-summary" data-brief-summary><p data-thanks-empty>Submit the project enquiry form to see its confirmation and a copy of the details here.</p></div><div class="thankyou-actions"><button class="button button-dark" type="button" data-copy-brief hidden>Copy submitted enquiry <span aria-hidden="true">↗</span></button><div data-thanks-actions class="thanks-send-actions"></div></div><p class="thankyou-note" data-thanks-note>Return to the project form to submit an enquiry.</p><a class="text-link" href="/request-a-quote/">Return to the project form <span aria-hidden="true">↗</span></a></div></div></section>'''
+    return page_intro("Project brief", "Thank you", "A clearer next step<br>starts <em>here.</em>", "Complete the project enquiry form to share the details VRAELIX needs to respond.") + '''<section class="section thankyou-section"><div class="wrap thankyou-grid"><div class="thankyou-content"><p class="eyebrow">Project enquiry</p><h2 data-thanks-title>No enquiry has been sent yet.</h2><div class="brief-summary" data-brief-summary><p data-thanks-empty>Submit the project enquiry form to see its confirmation and a copy of the details here.</p></div><div class="thankyou-actions"><div data-thanks-actions class="thanks-send-actions"></div></div><p class="thankyou-note" data-thanks-note>Return to the project form to submit an enquiry.</p><a class="text-link" href="/request-a-quote/">Return to the project form <span aria-hidden="true">↗</span></a></div></div></section>'''
 
 def render_legal(slug):
     title, sections = DATA["legal"][slug]
-    if not ZAPIER_WEBHOOK_URL and slug == "privacy":
+    if IS_STAGING_PREVIEW and slug == "privacy":
+        staging_sections = {
+            "How information is handled": (
+                "In this Staging preview, the Request a Quote form sends the details you enter to the Staging "
+                "Supabase Edge Function. The function validates the request, verifies a Cloudflare Turnstile "
+                "token, applies rate limiting with Upstash and attempts to insert accepted enquiries into the "
+                "Staging public.enquiries table. Use synthetic details only. This describes Staging; Production "
+                "processing has not been verified."
+            ),
+            "Information you may enter": (
+                "The form asks for your name, email address, phone number, requested service, project description, "
+                "budget, timeline and preferred contact method. Company or business name is optional. The function "
+                "also records a source label and server-generated submission time. Please include only information "
+                "needed to respond to your enquiry."
+            ),
+            "Third-party processing": (
+                "The Staging function uses Supabase for the function and database, Cloudflare Turnstile to verify "
+                "the challenge token, and Upstash for rate limiting. The function is coded to send a keyed hash "
+                "derived from the configured client-IP header to Upstash; it does not send enquiry fields through "
+                "Zapier or Google Sheets in this Staging build. Provider-side retention and hosting settings have "
+                "not been verified. Production processing is unverified."
+            ),
+            "Retention and requests": (
+                "The reviewed website code does not define an enquiry-retention period. Staging database and "
+                "backup retention or deletion settings have not been verified, and Production retention is "
+                "unverified. Use synthetic details only in this preview. To ask about an enquiry or request its "
+                "deletion, contact vraelix29@gmail.com."
+            ),
+        }
+        sections = [(head, staging_sections.get(head, text)) for head, text in sections]
+    elif IS_STAGING_PREVIEW and slug == "cookie-policy":
+        staging_sections = {
+            "Cookies and browser storage": (
+                "This Staging build uses localStorage to remember the privacy preference. After a successful "
+                "submission, sessionStorage keeps a copy of the entered brief in the current tab for the Thank You "
+                "page. Google Analytics 4 is not configured in this Staging build. The quote form loads Cloudflare "
+                "Turnstile when it requests a token; the reviewed website code does not configure Turnstile "
+                "pre-clearance. Provider cookie behavior and Production behavior have not been verified."
+            ),
+            "Enquiry submission": (
+                "In this Staging preview, the browser sends the form fields and Turnstile token to the Staging "
+                "Supabase Edge Function. If its checks pass, the function attempts to insert the enquiry into the "
+                "Staging public.enquiries table. This build does not send enquiry fields through Zapier or Google "
+                "Sheets. Production submission behavior is unverified."
+            ),
+            "Third-party services": (
+                "The form uses Cloudflare Turnstile for its challenge and the Staging Supabase Edge Function for "
+                "submission. The function is coded to use Upstash for rate limiting, sending a keyed hash derived "
+                "from the configured client-IP header. Zapier and Google Sheets are not configured for this "
+                "Staging build. Provider cookie behavior, retention and Production configuration have not been "
+                "verified."
+            ),
+            "Retention": (
+                "The reviewed website code does not define a retention period. Staging database and backup "
+                "retention or deletion settings, and Production retention, have not been verified. Use synthetic "
+                "details only in this preview. Contact vraelix29@gmail.com with a data request."
+            ),
+        }
+        sections = [(head, staging_sections.get(head, text)) for head, text in sections]
+    elif not ZAPIER_WEBHOOK_URL and slug == "privacy":
         analytics_summary = (
             " Optional Google Analytics 4 measurement is available only after you opt in through the privacy preferences."
             if GA4_MEASUREMENT_ID else
@@ -375,7 +494,7 @@ def render_legal(slug):
         sections = [(head, "The form is not connected in this build, so it does not send entries to Zapier or Google Sheets." if head == "Enquiry submission" else text) for head,text in sections]
         sections = [(head, "No enquiry form entries are sent to Zapier or Google Sheets in this build." if head == "Third-party services" else text) for head,text in sections]
         sections = [(head, "This build does not transmit enquiry entries or create records in Zapier or Google Sheets." if head == "Retention" else text) for head,text in sections]
-    if GA4_MEASUREMENT_ID and slug == "privacy":
+    if not IS_STAGING_PREVIEW and GA4_MEASUREMENT_ID and slug == "privacy":
         form_text = (
             "When you submit the Request a Quote form, your browser sends the enquiry details to Zapier, which VRAELIX uses to route records to Google Sheets."
             if ZAPIER_WEBHOOK_URL else
@@ -389,7 +508,7 @@ def render_legal(slug):
             "Optional Google Analytics 4 is loaded only after analytics consent and measures site usage. Google handles analytics data under its own privacy practices."
         )
         sections = [(head, processing_text if head == "Third-party processing" else text) for head,text in sections]
-    if GA4_MEASUREMENT_ID and slug == "cookie-policy":
+    if not IS_STAGING_PREVIEW and GA4_MEASUREMENT_ID and slug == "cookie-policy":
         sections = [(head, "Essential browser storage remembers your privacy choice and sessionStorage temporarily holds a submitted brief for the confirmation page. If you choose optional analytics, Google Analytics 4 may set first-party cookies such as _ga to distinguish visits. Analytics does not load before consent, and you can change your choice in the footer settings." if head == "Cookies and browser storage" else text) for head,text in sections]
         third_party_cookie_text = (
             "Zapier and Google process submitted enquiry information under their own terms and privacy practices. Google Analytics 4 is activated only after optional analytics consent and may set first-party analytics cookies."
@@ -413,12 +532,12 @@ def render_legal(slug):
     return page_intro("VRAELIX", "Legal", f'{esc(title)}<br><em>at VRAELIX.</em>', "This page explains the basic terms for this static website. Please read it alongside the information relevant to your use.") + f'''<section class="section legal-content"><div class="wrap legal-wrap"><p class="eyebrow">Website information</p>{content}<p class="legal-updated">Last reviewed: 8 October 2026</p><a class="text-link" href="/contact/">Contact VRAELIX <span aria-hidden="true">↗</span></a></div></section>'''
 
 def jsonld(path,title,description,service=None,faqs=None):
-    if not SITE_ORIGIN or path == "/thank-you/":
+    if not INDEXING_APPROVED or not SITE_ORIGIN or path == "/thank-you/":
         return ""
     homepage = site_url("/")
     page_url = site_url(path)
     graph = [
-      {"@type":"Organization","@id":homepage+"#organization","name":"VRAELIX","description":"A digital technology and solutions brand building thoughtful digital experiences, business systems and technology solutions around real business needs.","url":homepage,"email":EMAIL,"sameAs":[LINKEDIN,INSTAGRAM],"logo":{"@type":"ImageObject","url":homepage+"assets/logo-mark-black.png"}},
+      {"@type":"Organization","@id":homepage+"#organization","name":"VRAELIX","description":"A digital technology and solutions brand building thoughtful digital experiences, business systems and technology solutions around real business needs.","url":homepage,"email":EMAIL,"sameAs":[LINKEDIN,INSTAGRAM],"logo":{"@type":"ImageObject","url":homepage+"assets/brand/vraelix-logo.png"}},
       {"@type":"WebPage","@id":page_url+"#webpage","url":page_url,"name":title,"description":description,"isPartOf":{"@id":homepage+"#website"},"about":{"@id":homepage+"#organization"}}
     ]
     if path == "/":
@@ -433,21 +552,31 @@ def jsonld(path,title,description,service=None,faqs=None):
 
 def shell(path,title,description,content,active="",service=None,faqs=None):
     preload = '<link rel="preload" as="image" href="/assets/hero-poster.webp" fetchpriority="high">' if path == "/" else ""
+    icon_base = "/assets/brand/favicon-V"
+    icon_links = []
+    for color_scheme in ("light", "dark"):
+        for icon_size in (16, 32, 48):
+            icon_href = site_path(f"{icon_base}/favicon-{color_scheme}-{icon_size}.png")
+            icon_links.append(
+                f'<link rel="icon" type="image/png" sizes="{icon_size}x{icon_size}" '
+                f'href="{icon_href}" media="(prefers-color-scheme: {color_scheme})">'
+            )
+    favicon_markup = "".join(icon_links) + f'<link rel="manifest" href="{site_path("/site.webmanifest")}">'
     ld = jsonld(path,title,description,service,faqs or [])
-    canonical = f'<link rel="canonical" href="{esc(site_url(path))}">' if SITE_ORIGIN else ""
+    canonical = f'<link rel="canonical" href="{esc(site_url(path))}">' if INDEXING_APPROVED and SITE_ORIGIN else ""
     social_urls = (
         f'<meta property="og:url" content="{esc(site_url(path))}">'
         f'<meta property="og:image" content="{esc(site_url("/assets/hero-poster.png"))}">'
         f'<meta name="twitter:image" content="{esc(site_url("/assets/hero-poster.png"))}">'
-        if SITE_ORIGIN else ""
+        if INDEXING_APPROVED and SITE_ORIGIN else ""
     )
-    robots = "noindex,follow" if path == "/thank-you/" else "index,follow,max-image-preview:large"
+    robots = "index,follow,max-image-preview:large" if INDEXING_APPROVED and path != "/thank-you/" else "noindex,follow"
     schema_script = f'<script type="application/ld+json">{ld}</script>' if ld else ""
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc(title)}</title><meta name="description" content="{esc(description)}"><meta name="robots" content="{robots}">{canonical}{preload}<link rel="icon" type="image/png" href="/assets/favicon.png"><meta name="theme-color" content="#111110">
+<title>{esc(title)}</title><meta name="description" content="{esc(description)}"><meta name="robots" content="{robots}">{canonical}{preload}<meta name="theme-color" content="#17191D">{favicon_markup}
 <meta property="og:type" content="website"><meta property="og:site_name" content="VRAELIX"><meta property="og:title" content="{esc(title)}"><meta property="og:description" content="{esc(description)}">{social_urls}<meta property="og:image:alt" content="Cinematic monochrome visual identity for VRAELIX"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{esc(title)}"><meta name="twitter:description" content="{esc(description)}">
-<link rel="stylesheet" href="/assets/site.css"><script src="/assets/site-config.js"></script>{schema_script}</head>
+<link rel="stylesheet" href="/assets/site.css?v={CSS_VERSION}"><script src="/assets/site-config.js"></script>{schema_script}</head>
 <body data-route="{path}">{header(active)}<main id="main">{content}</main>{footer()}{consent_panel()}<script src="/assets/zapier-adapter.js" defer></script><script src="/assets/supabase-adapter.js" defer></script><script src="/assets/enquiry-adapter.js" defer></script><script src="/assets/site.js" defer></script></body></html>'''
 
 renderers = {
@@ -456,8 +585,18 @@ renderers = {
   "quote": render_quote, "thank": render_thankyou
 }
 rendered_pages = list(DATA["pages"])
+SERVICE_META_DESCRIPTIONS = {
+    "website-development": "Plan and build a responsive website around your business, audience and goals—from page structure and design to development and launch support.",
+    "business-websites": "Bring your story, services and enquiries into a clear business website, with a page structure shaped around your audience.",
+    "ecommerce": "Plan an online store around your products, customer journey and operations, including storefront structure and agreed platform setup.",
+    "landing-pages": "Give a campaign, offer or product a focused landing page with a clear message, responsive layout and next action.",
+    "seo-performance": "Review technical and on-page SEO, internal links, accessibility, image handling and performance to make a site easier to find, understand and use.",
+    "maintenance": "Website maintenance may include agreed content updates, routine checks, platform updates, backups and small improvements based on your site and support needs.",
+    "automation": "Map repeatable business workflows and explore practical automation across existing tools, based on the process and its constraints.",
+    "custom-solutions": "Scope a tailored web experience, business tool or system connection around its intended users, operational problem and technical constraints.",
+}
 for service in SERVICES:
-    rendered_pages.append([service_path(service), f'{service["name"]} | VRAELIX Digital Solutions', f'{service["name"]} from VRAELIX. Understand what the service includes, who it can help and how to start a project shaped around your business need.', "service", service["slug"]])
+    rendered_pages.append([service_path(service), f'{service["name"]} | VRAELIX Digital Solutions', SERVICE_META_DESCRIPTIONS[service["slug"]], "service", service["slug"]])
 
 # Clean generated pages and hosting metadata before rebuilding, while retaining
 # the checked-in static asset directory used by this project.
@@ -475,8 +614,42 @@ if not IS_DEFAULT_OUTPUT and not (ROOT/"assets/site.css").is_file():
         raise ValueError("The existing generated asset directory is required to build the GitHub Pages copy")
     shutil.copytree(source_assets, ROOT / "assets", dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("site-config.js"))
-for asset_name in ("site.js", "zapier-adapter.js", "supabase-adapter.js", "enquiry-adapter.js"):
+for asset_name in ("site.css", "site.js", "zapier-adapter.js", "supabase-adapter.js", "enquiry-adapter.js", "vraelix-logo-lockup-white.webp"):
     shutil.copyfile(Path("work/assets") / asset_name, ROOT / "assets" / asset_name)
+brand_source = Path("work/assets/brand")
+brand_target = ROOT / "assets" / "brand"
+brand_target.mkdir(parents=True, exist_ok=True)
+for asset_name in ("vraelix-logo.png", "vraelix-logo-white.png", "vraelix-logo.webp", "vraelix-logo-white.webp"):
+    source_asset = brand_source / asset_name
+    if not source_asset.is_file():
+        raise FileNotFoundError(f"Required VRAELIX brand asset is missing: {source_asset}")
+    shutil.copyfile(source_asset, brand_target / asset_name)
+favicon_source = brand_source / "favicon-V"
+favicon_target = brand_target / "favicon-V"
+favicon_target.mkdir(parents=True, exist_ok=True)
+favicon_files = [f"favicon-{scheme}-{size}.png" for scheme in ("light", "dark") for size in (16, 32, 48, 512)]
+for asset_name in favicon_files:
+    source_asset = favicon_source / asset_name
+    if not source_asset.is_file():
+        raise FileNotFoundError(f"Required favicon-V asset is missing: {source_asset}")
+    shutil.copyfile(source_asset, favicon_target / asset_name)
+web_manifest = {
+    "name": "VRAELIX",
+    "short_name": "VRAELIX",
+    "start_url": site_path("/"),
+    "scope": site_path("/"),
+    "display": "standalone",
+    "icons": [
+        {
+            "src": site_path(f"/assets/brand/favicon-V/favicon-{scheme}-512.png"),
+            "sizes": "512x512",
+            "type": "image/png",
+        }
+        for scheme in ("light", "dark")
+    ],
+}
+(ROOT / "site.webmanifest").write_text(json.dumps(web_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+CSS_VERSION = hashlib.sha256((ROOT / "assets/site.css").read_bytes()).hexdigest()[:12]
 desktop_video_source = Path("work/source.mp4")
 desktop_video_target = ROOT/"assets/vraelix-cinematic.mp4"
 if desktop_video_source.is_file():
@@ -515,16 +688,18 @@ for entry in rendered_pages:
     f'  instagram: "{INSTAGRAM}",\n'
     f'  linkedin: "{LINKEDIN}",\n'
     f'  zapierWebhookUrl: {json.dumps(ZAPIER_WEBHOOK_URL)}, // Set VRAELIX_ZAPIER_WEBHOOK_URL at build time; this URL is public in browser code.\n'
-    f'  supabaseUrl: {json.dumps(SUPABASE_PROJECT_URL)},\n'
-    f'  supabasePublishableKey: {json.dumps(SUPABASE_PUBLISHABLE_KEY)},\n'
+    f'  supabaseUrl: {json.dumps(SUPABASE_PROJECT_URL if ENQUIRY_BACKEND == "supabase" else "")},\n'
+    f'  supabasePublishableKey: {json.dumps(SUPABASE_PUBLISHABLE_KEY if ENQUIRY_BACKEND == "supabase" else "")},\n'
     f'  enquiryBackend: {json.dumps(ENQUIRY_BACKEND)},\n'
-    f'  turnstileSiteKey: {json.dumps(TURNSTILE_SITE_KEY)},\n'
+    f'  enquiryBackendVerified: {str(ENQUIRY_BACKEND_VERIFIED).lower()},\n'
+    f'  enquiryStagingTestMode: {str(STAGING_FORM_TEST_MODE).lower()},\n'
+    f'  turnstileSiteKey: {json.dumps(TURNSTILE_SITE_KEY if ENQUIRY_BACKEND == "supabase" else "")},\n'
     f'  ga4MeasurementId: {json.dumps(GA4_MEASUREMENT_ID)},\n'
     f'  siteBasePath: {json.dumps(SITE_BASE_PATH)},\n'
     f'  services: {json.dumps([s["name"] for s in SERVICES] + ["Other", "Not sure yet"], ensure_ascii=False)}\n'
     "};\n",encoding="utf-8")
 
-if SITE_ORIGIN:
+if INDEXING_APPROVED and SITE_ORIGIN:
     public_pages = [entry for entry in rendered_pages if entry[0] != "/thank-you/"]
     locations = "".join(f"  <url><loc>{site_url(entry[0])}</loc></url>\n" for entry in public_pages)
     (ROOT/"sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+locations+'</urlset>\n',encoding="utf-8")

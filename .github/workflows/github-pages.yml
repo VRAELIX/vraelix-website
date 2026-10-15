@@ -17,6 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VRAELIX_GA4_MEASUREMENT_ID: ${{ vars.VRAELIX_GA4_MEASUREMENT_ID }}
+      VRAELIX_ENQUIRY_BACKEND: supabase
+      VRAELIX_SUPABASE_URL: ${{ vars.VRAELIX_SUPABASE_URL }}
+      VRAELIX_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VRAELIX_SUPABASE_PUBLISHABLE_KEY }}
+      VRAELIX_TURNSTILE_SITE_KEY: ${{ vars.VRAELIX_TURNSTILE_SITE_KEY }}
+      # Search indexing stays off until explicitly approved in a reviewed change.
+      VRAELIX_INDEXING_APPROVED: "false"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

@@ -6,12 +6,12 @@ VRAELIX is a static multi-page website built from HTML templates, CSS, browser J
 
 - `work/build_site.py` generates the existing static routes and host metadata.
 - `work/site_data.json` contains the page, service and legal copy.
-- `work/assets/` contains the website's browser-side JavaScript adapters.
+- `work/assets/site.css` is the authoritative stylesheet; `work/assets/` also contains the browser-side JavaScript adapters.
 - `work/audit_site.py` checks the ordinary static build.
-- `work/build_github_pages.py` creates and audits a clean `github-pages/` publishing copy without changing the regular Zapier build.
+- `work/build_github_pages.py` creates and audits a clean `github-pages/` publishing copy with Supabase selected and enquiry submission disabled until verified.
 - `work/audit_github_pages.py` checks routes, links, local assets, base-path handling, and public-output exclusions.
 - `outputs/vraelix-premium-site/` is the regular generated local/static-host output.
-- `supabase/functions/submit-enquiry/index.ts` is review-stage Edge Function source; it has not been deployed.
+- `supabase/functions/submit-enquiry/index.ts` is the Edge Function source. Deployment status is external to this repository and must be checked in the intended Supabase project.
 
 ## Build and audit
 
@@ -23,7 +23,7 @@ python work/audit_site.py
 python work/build_github_pages.py
 ```
 
-The GitHub Pages build writes only to the ignored `github-pages/` directory. It builds with `VRAELIX_ENQUIRY_BACKEND=zapier`, but deliberately blanks all browser backend endpoints and credentials. The local Zapier config remains in the ordinary ignored output and rollback copy. The public artifact's quote form is disabled until a server-side endpoint is deployed and approved; a browser-visible Zapier Catch Hook is not safe to conceal with a GitHub secret.
+The GitHub Pages build writes only to the ignored `github-pages/` directory and explicitly selects Supabase. It includes only the public Project URL and publishable key from the build environment. It never copies `.env.local` or server credentials. The quote form remains disabled because `ENQUIRY_BACKEND_VERIFIED` is held false in the source until the Edge Function, database permissions, Turnstile, rate limiting, origin checks and approved end-to-end test are verified. The Zapier adapter remains available in source for a reviewed rollback; its browser-visible Catch Hook is omitted from the public artifact.
 
 The GitHub Actions workflow at `.github/workflows/github-pages.yml` is `workflow_dispatch` only. It derives the live origin and repository base path from GitHub's actual owner/repository context at run time, then builds and publishes the static artifact. No repository, owner, or production origin is assumed by the local build.
 
@@ -33,7 +33,9 @@ GitHub Pages does not apply the generated `_headers` or `_redirects` files. The 
 
 The project-root `.env.local` is local-only and ignored by Git. The static builder reads only allowlisted names. Do not copy `.env.local` into a publishing folder.
 
-- `VRAELIX_SUPABASE_URL` and `VRAELIX_SUPABASE_PUBLISHABLE_KEY` are public browser configuration. The GitHub Pages artifact clears them while Zapier remains selected.
+- `VRAELIX_ENQUIRY_BACKEND` is set to `supabase` in local `.env.local` and explicitly in the Pages workflow; the build fails if the public Supabase URL or publishable key is missing.
+- `VRAELIX_SUPABASE_URL` and `VRAELIX_SUPABASE_PUBLISHABLE_KEY` are public browser configuration. Local builds read them from `.env.local`; GitHub Actions reads matching repository **Variables** with those exact names. These values appear in `assets/site-config.js` only when Supabase is selected. A publishable key is not authentication or a substitute for RLS and Edge Function checks.
+- `VRAELIX_TURNSTILE_SITE_KEY` is a public site key. Configure it as a local build value and a GitHub Actions repository **Variable** after the actual Pages hostname is known. The form remains disabled while backend verification is false.
 - `VRAELIX_GA4_MEASUREMENT_ID` is optional and public. Add the real `G-...` value to `.env.local` for a local build, or as the GitHub Actions repository **Variable** named `VRAELIX_GA4_MEASUREMENT_ID` after the Analytics property and final website URL exist. Never use a placeholder ID.
 - `VRAELIX_SITE_ORIGIN` is the verified HTTPS origin only, without a path. The GitHub Actions workflow computes the real `github.io` origin after the repository exists.
 - `VRAELIX_GH_PAGES_BASE_PATH` is empty for a user/organization site and `/<repository>` for a project site. The workflow computes this from GitHub context.
@@ -43,17 +45,21 @@ The project-root `.env.local` is local-only and ignored by Git. The static build
 
 GA4 is inactive while the Measurement ID is blank. When a real ID is configured, the existing compact privacy panel exposes an unchecked optional analytics choice. The Google tag is not requested before explicit analytics consent; `Accept all` opts in, while saving preferences with the checkbox clear keeps analytics off. The footer settings control reopens preferences. The runtime prevents duplicate tag initialization. GA4 uses first-party analytics cookies and sends site usage/device information to Google; the Privacy and Cookie Policy copy is generated conditionally when an ID is present. Review Google property retention and data-sharing settings and applicable legal obligations before enabling it.
 
-## Supabase Option A — review only
+## Supabase staging integration — current state
 
-The existing `public.enquiries` table is reused and is not dropped or recreated. The proposed migration creates `vraelix_enquiry_writer` as a non-superuser, non-inheriting login role with RLS still enabled, a single INSERT policy, and column-level INSERT grants for only the approved enquiry fields. It omits `id` and `created_at` so existing defaults continue to apply. The migration proposes revoking table/column access from `PUBLIC`, `anon` and `authenticated`; it leaves `service_role` unchanged. It does not grant role membership to `anon`, `authenticated`, `authenticator`, or other Supabase roles. The read-only `supabase/review/enquiry_writer_acl_checks.sql` checks table/column ACLs, `PUBLIC` rights, default function grants, role memberships and effective privileges. No migration has been applied.
+The separate staging project is `fqgrdfxboskdyqaipabr`; Production is `ttustzodhlvzanovtzoj`. The migrations below describe the intended staging schema and writer permissions, but repository files do not prove the current remote state. Verify table rows, RLS, grants, deployments, and secrets directly in Staging before relying on them. Production changes require a separate explicit approval.
 
-The Edge Function source uses a dedicated Postgres connection URL (`VRAELIX_ENQUIRY_DATABASE_URL`) through the Supabase transaction pooler, not a Supabase service-role or secret API key. The database password belongs only in the Edge Function's secure secrets. Before approving the migration, inspect inherited `PUBLIC` privileges on the database, schemas, functions and extensions; PostgreSQL has no per-role deny that cancels a `PUBLIC` grant. The migration only revokes table privileges on `public.enquiries`; any wider revocation needs its own impact review.
+The staging migrations were previously applied through the Dashboard SQL Editor, while a prior read-only check found no `supabase_migrations.schema_migrations` relation. Before any CLI migration operation, inspect the current Staging state and use only Supabase's supported history-repair workflow if it remains appropriate. Do not rerun migration SQL, create migration-history tables manually, or use `supabase db push` to reconcile manually applied changes.
 
-The public function is configured with JWT verification disabled because visitors are not signed-in Supabase users. The publishable `apikey` is public and is not authentication. The function must fail closed until exact origins, Turnstile, Upstash and the trusted client-IP header are configured. `VRAELIX_CLIENT_IP_HEADER` intentionally has no default because the actual trusted header from the Supabase request path has not been verified. CORS is not authentication or rate limiting.
+The Edge Function should use the dedicated `vraelix_enquiry_writer` connection through the server-side `VRAELIX_ENQUIRY_DATABASE_URL` secret. Keep its password and connection URL in the Staging Function secret store only; never place them in `.env.local`, source files, logs, frontend output, Git, or chat. The function must not use a service-role key for database writes.
 
-Required server-side settings are `VRAELIX_ALLOWED_ORIGINS`, `VRAELIX_CLIENT_IP_HEADER`, `VRAELIX_ENQUIRY_DATABASE_URL`, `VRAELIX_TURNSTILE_SECRET_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and `VRAELIX_RATE_LIMIT_HASH_SECRET`. Store them through Supabase's secrets mechanism only. The public Turnstile site key is `VRAELIX_TURNSTILE_SITE_KEY`; it belongs in public build configuration after the real GitHub hostname is known.
+The public function endpoint has JWT verification disabled because visitors are not signed-in Supabase users; it must instead enforce the exact Origin allowlist, Turnstile, fail-closed Upstash rate limiting, request validation, and the restricted writer connection. Verify the deployed function revision and trusted client-IP header from the actual Staging ingress before treating rate limiting as operational. CORS and the public publishable key are not authentication.
 
-Do not change `VRAELIX_ENQUIRY_BACKEND=zapier`, apply the migration, deploy the function, or send a synthetic row until the review and explicit approvals are complete. The complete schema/permission proposal is in `supabase/migrations/202610090001_enquiry_writer_role.sql` and `supabase/functions/submit-enquiry/index.ts`.
+Required server-side Function secret names are `VRAELIX_ALLOWED_ORIGINS`, `VRAELIX_CLIENT_IP_HEADER`, `VRAELIX_ENQUIRY_DATABASE_URL`, `VRAELIX_TURNSTILE_SECRET_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and `VRAELIX_RATE_LIMIT_HASH_SECRET`. Store values in Supabase's Function secret store only. The public `VRAELIX_TURNSTILE_SITE_KEY`, Staging Supabase URL, and publishable key belong in ignored `.env.staging.local` for local Staging builds.
+
+For a later local staging browser test, build to the ignored `outputs/vraelix-staging-preview/` with `VRAELIX_BUILD_OUTPUT=outputs/vraelix-staging-preview` and set `VRAELIX_STAGING_FORM_TEST_MODE=true` in the build process environment. The builder only accepts that mode for this separate output directory, the approved staging project reference, staging public keys, a Turnstile site key, and no production site origin. The local server can serve that output when given the same `VRAELIX_BUILD_OUTPUT`. Use synthetic data only. The normal local and GitHub Pages builds keep `enquiryBackendVerified` false, the form disabled, and production settings unchanged.
+
+The migrations are `supabase/migrations/202610090000_enquiries_schema.sql` and `supabase/migrations/202610090001_enquiry_writer_role.sql`. A local build or source review cannot establish whether the current deployed function, secret configuration, database connection, or test submission is working; verify those in the Staging project before claiming end-to-end readiness.
 
 ## Verification limits
 
