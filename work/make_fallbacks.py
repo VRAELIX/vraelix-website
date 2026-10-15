@@ -1,12 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 from pathlib import Path
 p=Path('outputs/vraelix-premium-site/assets')
-im=Image.new('RGB',(64,64),(17,17,16))
-d=ImageDraw.Draw(im)
-font=ImageFont.truetype(r'C:\Windows\Fonts\georgia.ttf',43)
-b=d.textbbox((0,0),'V',font=font)
-d.text(((64-(b[2]-b[0]))/2-b[0],(64-(b[3]-b[1]))/2-b[1]-2),'V',font=font,fill=(243,242,240))
-im.save(p/'favicon.png',optimize=True)
 # Premium fallback while the source film is being prepared for the web.
 poster=Image.new('RGB',(1200,630),(18,18,17))
 d=ImageDraw.Draw(poster)

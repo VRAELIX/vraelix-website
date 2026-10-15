@@ -1,17 +1,58 @@
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import json
+import os
+import re
 import sys
+from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parent.parent / "outputs" / "vraelix-premium-site"
+WORKSPACE = Path(__file__).resolve().parent.parent
+BUILD_OUTPUT = os.environ.get("VRAELIX_BUILD_OUTPUT", "outputs/vraelix-premium-site")
+if BUILD_OUTPUT not in ("outputs/vraelix-premium-site", "outputs/vraelix-staging-preview"):
+    raise ValueError("VRAELIX_BUILD_OUTPUT must select a generated VRAELIX website directory")
+ROOT = WORKSPACE / "outputs" / "vraelix-premium-site"
+if BUILD_OUTPUT == "outputs/vraelix-staging-preview":
+    ROOT = WORKSPACE / "outputs" / "vraelix-staging-preview"
 try:
     config_text = (ROOT / "assets/site-config.js").read_text(encoding="utf-8")
 except OSError:
     config_text = ""
-zapier_connect = " https://hooks.zapier.com" if 'zapierWebhookUrl: "https://hooks.zapier.com/' in config_text else ""
+def config_value(name):
+    match = re.search(
+        r"^\s*" + re.escape(name) + r'\s*:\s*("(?:\\.|[^"\\])*")',
+        config_text,
+        re.MULTILINE,
+    )
+    try:
+        return json.loads(match.group(1)) if match else ""
+    except (ValueError, json.JSONDecodeError):
+        return ""
+
+
+backend = config_value("enquiryBackend")
+backend_verified = bool(
+    re.search(r"^\s*enquiryBackendVerified:\s*true\s*,?$", config_text, re.MULTILINE)
+    or re.search(r"^\s*enquiryStagingTestMode:\s*true\s*,?$", config_text, re.MULTILINE)
+)
+connect_sources = ["'self'"]
+script_sources = ["'self'"]
+frame_sources = ["'self'"]
+if backend_verified and backend == "zapier" and config_value("zapierWebhookUrl"):
+    connect_sources.append("https://hooks.zapier.com")
+if backend_verified and backend == "supabase":
+    supabase_url = config_value("supabaseUrl")
+    if supabase_url:
+        parsed_supabase_url = urlsplit(supabase_url)
+        if parsed_supabase_url.scheme == "https" and parsed_supabase_url.netloc:
+            connect_sources.append(f"{parsed_supabase_url.scheme}://{parsed_supabase_url.netloc}")
+    if config_value("turnstileSiteKey"):
+        connect_sources.append("https://challenges.cloudflare.com")
+        script_sources.append("https://challenges.cloudflare.com")
+        frame_sources.append("https://challenges.cloudflare.com")
 CSP = (
     "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-    "form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-    f"font-src 'self'; media-src 'self'; connect-src 'self'{zapier_connect}; manifest-src 'self'; worker-src 'self'"
+    f"form-action 'self'; script-src {' '.join(script_sources)}; style-src 'self'; img-src 'self' data:; "
+    f"font-src 'self'; media-src 'self'; connect-src {' '.join(connect_sources)}; frame-src {' '.join(frame_sources)}; manifest-src 'self'; worker-src 'self'"
 )
 
 

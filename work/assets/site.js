@@ -18,6 +18,14 @@
     if (source) {
       const breakpoint = window.matchMedia("(max-width: 600px)");
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      let heroIsVisible = true;
+      const syncVideoPlayback = () => {
+        if (reducedMotion.matches || !heroIsVisible) {
+          video.pause();
+          return;
+        }
+        video.play().catch(() => {});
+      };
       if (reducedMotion.matches) {
         video.removeAttribute("autoplay");
         video.pause();
@@ -29,7 +37,7 @@
           [fallback, fallback && (mobile ? fallback.dataset.mobile : fallback.dataset.desktop)]
         ].filter(([item, path]) => item && path);
         if (!selected.some(([item, path]) => item.getAttribute("src") !== path)) return;
-        const shouldPlay = !reducedMotion.matches && (video.autoplay || !video.paused);
+        const shouldPlay = !reducedMotion.matches && heroIsVisible && (video.autoplay || !video.paused);
         selected.forEach(([item, path]) => {
           item.src = path;
           item.type = path.toLowerCase().endsWith(".mp4") ? "video/mp4" : "video/webm";
@@ -42,15 +50,22 @@
       else if (breakpoint.addListener) breakpoint.addListener(selectVideo);
       const handleMotionPreference = (event) => {
         if (event.matches) {
-          video.pause();
           video.removeAttribute("autoplay");
         } else {
           video.setAttribute("autoplay", "");
-          video.play().catch(() => {});
         }
+        syncVideoPlayback();
       };
       if (reducedMotion.addEventListener) reducedMotion.addEventListener("change", handleMotionPreference);
       else if (reducedMotion.addListener) reducedMotion.addListener(handleMotionPreference);
+      const hero = video.closest(".hero");
+      if (hero && "IntersectionObserver" in window) {
+        const videoVisibilityObserver = new IntersectionObserver((entries) => {
+          heroIsVisible = entries.some((entry) => entry.isIntersecting);
+          syncVideoPlayback();
+        }, { threshold: 0.05 });
+        videoVisibilityObserver.observe(hero);
+      }
     }
   }
 
@@ -266,8 +281,8 @@
   }
 
   const icons = {
-    linkedin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9v10M5 5v.1M9 19v-6a4 4 0 0 1 8 0v6M9 9v10"/></svg>',
-    instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.8h.01"/></svg>'
+    linkedin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM3.56 9h3.56v11.45H3.56V9Z"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.6" cy="6.6" r="1.1" fill="currentColor"/></svg>'
   };
   const contacts = [];
   if (config.email) contacts.push({ key: "email", label: "Email", url: "mailto:" + config.email, raw: config.email });
@@ -332,11 +347,27 @@
     const feedback = form.querySelector("[data-form-feedback]");
     const submitButton = form.querySelector('button[type="submit"]');
     const activeBackend = config.enquiryBackend === "supabase" ? "supabase" : "zapier";
-    const backendReady = activeBackend === "supabase"
+    const stagingTestMode = activeBackend === "supabase" && config.enquiryStagingTestMode === true;
+    const backendReady = (config.enquiryBackendVerified === true || stagingTestMode) && (activeBackend === "supabase"
       ? Boolean(config.supabaseUrl && config.supabasePublishableKey && config.turnstileSiteKey)
-      : Boolean(config.zapierWebhookUrl);
+      : Boolean(config.zapierWebhookUrl));
     const turnstileSlot = form.querySelector("[data-turnstile-slot]");
     if (activeBackend === "supabase" && backendReady && turnstileSlot) turnstileSlot.hidden = false;
+    const showUnavailableMessage = () => {
+      if (submitButton) submitButton.disabled = true;
+      if (!feedback) return;
+      feedback.replaceChildren(document.createTextNode("Online enquiries cannot currently be submitted. Your details will not be sent. Please "));
+      const email = typeof config.email === "string" ? config.email.trim() : "";
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        const emailLink = document.createElement("a");
+        emailLink.href = `mailto:${email}`;
+        emailLink.textContent = "email VRAELIX";
+        feedback.append(emailLink, document.createTextNode(" instead."));
+      } else {
+        feedback.append(document.createTextNode("contact VRAELIX instead."));
+      }
+      feedback.dataset.state = "unavailable";
+    };
     const field = (name) => form.elements.namedItem(name);
     const validationNames = ["full_name", "email", "phone_number", "service", "project_description", "contact_method"];
     const phoneIsValid = (value) => {
@@ -348,7 +379,9 @@
       const input = field(name);
       const value = cleanFormValue(input ? input.value : "", labels.find((item) => item[0] === name)?.[2] || 2400, name === "project_description");
       if (name === "full_name" && value.length < 2) return "Enter your name (at least 2 characters).";
-      if (name === "email" && (!input || !input.checkValidity())) return "Enter a valid email address.";
+      // Read ValidityState directly. Calling checkValidity() here dispatches
+      // another `invalid` event, which re-enters this handler recursively.
+      if (name === "email" && (!input || !input.validity.valid)) return "Enter a valid email address.";
       if (name === "phone_number" && !phoneIsValid(value)) return "Enter a phone number with 7–15 digits.";
       if (name === "service" && (!Array.isArray(config.services) || !config.services.includes(value))) return "Choose a listed service.";
       if (name === "project_description" && value.length < 10) return "Add at least 10 characters about your project.";
@@ -366,6 +399,13 @@
     labels.forEach(([name]) => {
       const input = field(name);
       if (input) {
+        input.addEventListener("invalid", () => {
+          setFieldError(name, fieldError(name));
+          if (feedback) {
+            feedback.textContent = "Please review the highlighted fields and try again.";
+            feedback.dataset.state = "error";
+          }
+        });
         input.addEventListener("input", () => {
           if (input.getAttribute("aria-invalid") === "true") {
             setFieldError(name, fieldError(name));
@@ -400,14 +440,14 @@
           feedback.dataset.state = "error";
         }
         const firstInvalid = field(invalid[0]);
-        if (firstInvalid) firstInvalid.focus();
+        if (firstInvalid) {
+          firstInvalid.focus();
+          if (!firstInvalid.checkValidity()) firstInvalid.reportValidity();
+        }
         return;
       }
       if (!backendReady) {
-        if (feedback) {
-          feedback.textContent = "This form is not ready to send yet. Your details are still here; please contact VRAELIX by email or try again later.";
-          feedback.dataset.state = "error";
-        }
+        showUnavailableMessage();
         return;
       }
       const payload = {
@@ -502,6 +542,8 @@
     if (backendReady && submitButton) {
       submitButton.disabled = false;
       if (feedback) feedback.textContent = "";
+    } else if (!backendReady) {
+      showUnavailableMessage();
     }
   }
 
@@ -518,9 +560,6 @@
       briefConfirmed = true;
     }
   } catch (_) {}
-  const briefText = () => brief
-    ? labels.filter((pair) => brief[pair[0]]).map((pair) => pair[1] + ": " + brief[pair[0]]).join("\n")
-    : "";
   const summary = document.querySelector("[data-brief-summary]");
   if (summary && brief) {
     const dl = document.createElement("dl");
@@ -537,30 +576,9 @@
       ? "Thank you, " + brief.full_name + ". Your enquiry has been received."
       : "Thank you. Your enquiry has been received.";
     const note = document.querySelector("[data-thanks-note]");
-    if (note) note.textContent = "Your project enquiry was received by VRAELIX. This copy is available in this browser tab for your records.";
+    if (note) note.textContent = "Your project enquiry was received by VRAELIX. These details are shown here for your records.";
     const empty = document.querySelector("[data-thanks-empty]");
     if (empty) empty.hidden = true;
-    const copy = document.querySelector("[data-copy-brief]");
-    if (copy) copy.hidden = false;
-  }
-  const copyButton = document.querySelector("[data-copy-brief]");
-  if (copyButton && brief) {
-    copyButton.addEventListener("click", async () => {
-      const text = briefText();
-      if (!text) return;
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch (_) {
-        const helper = document.createElement("textarea");
-        helper.value = text;
-        helper.className = "clipboard-fallback";
-        document.body.append(helper);
-        helper.select();
-        document.execCommand("copy");
-        helper.remove();
-      }
-      copyButton.textContent = "Copied";
-    });
   }
   const actions = document.querySelector("[data-thanks-actions]");
   if (actions && briefConfirmed) {
@@ -570,7 +588,7 @@
     actions.replaceChildren(link);
   }
 
-  const revealItems = document.querySelectorAll(".section-heading,.intro-grid,.founder-grid,.steps-grid,.insight-card,.process-row,.principle-grid article,.faq-item,.service-main,.contact-grid,.quote-form-wrap");
+  const revealItems = document.querySelectorAll(".section-heading,.intro-grid,.split-copy,.founder-grid,.founder-story-grid,.steps-grid,.insight-card,.process-row,.principle-grid article,.faq-item,.service-main,.service-detail-grid,.contact-grid,.faq-layout,.quote-form-wrap");
   if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     const observer = new IntersectionObserver((entries, current) => {
       entries.forEach((entry) => {
@@ -584,5 +602,11 @@
       element.setAttribute("data-reveal", "");
       observer.observe(element);
     });
+
+    const artTargets = document.querySelectorAll(".intro-grid,.split-copy,.contact-grid,.founder-story-grid,.service-detail-grid,.faq-layout");
+    const artObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => entry.target.classList.toggle("art-in-view", entry.isIntersecting));
+    }, { threshold: 0, rootMargin: "100px 0px" });
+    artTargets.forEach((element) => artObserver.observe(element));
   }
 })();

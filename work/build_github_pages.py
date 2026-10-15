@@ -34,10 +34,7 @@ shutil.copytree(
 environment = os.environ.copy()
 environment["VRAELIX_BUILD_OUTPUT"] = str(TARGET)
 environment["VRAELIX_ZAPIER_WEBHOOK_URL"] = ""
-environment["VRAELIX_SUPABASE_URL"] = ""
-environment["VRAELIX_SUPABASE_PUBLISHABLE_KEY"] = ""
-environment["VRAELIX_TURNSTILE_SITE_KEY"] = ""
-environment["VRAELIX_ENQUIRY_BACKEND"] = "zapier"
+environment["VRAELIX_ENQUIRY_BACKEND"] = "supabase"
 
 for script in ("work/build_site.py", "work/prepare_github_pages.py", "work/audit_github_pages.py"):
     subprocess.run([sys.executable, script], cwd=WORKSPACE, env=environment, check=True)

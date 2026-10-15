@@ -53,6 +53,8 @@ def local_target(value: str, base_path: str, route: str) -> tuple[str, Path | No
         path = path[len(base_path):] or "/"
     if path.startswith("/assets/"):
         return "asset", ROOT / path.lstrip("/")
+    if Path(path).suffix:
+        return "asset", ROOT / path.lstrip("/")
     normalized = path if path.endswith("/") else path + "/"
     if normalized == "//":
         normalized = "/"
@@ -68,13 +70,14 @@ config = config_path.read_text(encoding="utf-8") if config_path.is_file() else "
 base_path = config_string(config, "siteBasePath")
 if base_path and (not base_path.startswith("/") or base_path.endswith("/") or ".." in base_path.split("/")):
     errors.append("Invalid siteBasePath in generated configuration")
-if config_string(config, "enquiryBackend") != "zapier":
-    errors.append("GitHub Pages output changed the default backend selector")
+if config_string(config, "enquiryBackend") != "supabase":
+    errors.append("GitHub Pages must select Supabase explicitly; it must not fall back to Zapier")
+if not re.search(r'^\s*enquiryBackendVerified:\s*false\s*,?$', config, re.MULTILINE):
+    errors.append("GitHub Pages must keep enquiry submission disabled pending approved verification")
 if config_string(config, "zapierWebhookUrl"):
     errors.append("Browser-visible Zapier endpoint remains in the public output")
-for name in ("supabaseUrl", "supabasePublishableKey", "turnstileSiteKey"):
-    if config_string(config, name):
-        errors.append(f"Unused public backend setting {name} should be blank while Zapier remains selected")
+if not config_string(config, "supabaseUrl") or not config_string(config, "supabasePublishableKey"):
+    errors.append("Supabase public project URL and publishable key must be present in Supabase mode")
 
 missing = []
 for route in ROUTES:

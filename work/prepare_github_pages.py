@@ -30,6 +30,11 @@ def config_value(source: str, name: str) -> str:
         return ""
 
 
+def config_boolean(source: str, name: str) -> bool:
+    match = re.search(r'^\s*' + re.escape(name) + r'\s*:\s*(true|false)\s*,?$', source, re.MULTILINE)
+    return bool(match and match.group(1) == "true")
+
+
 def set_config_value(source: str, name: str, value: str) -> str:
     pattern = re.compile(r"^(\s*" + re.escape(name) + r"\s*:\s*)(\"(?:\\.|[^\"\\])*\")", re.MULTILINE)
     updated, count = pattern.subn(lambda match: match.group(1) + json.dumps(value), source)
@@ -52,12 +57,16 @@ def normalize_base_path(value: str) -> str:
 config = CONFIG_PATH.read_text(encoding="utf-8")
 backend = config_value(config, "enquiryBackend")
 base_path = normalize_base_path(config_value(config, "siteBasePath"))
-if backend != "zapier":
-    raise SystemExit("The GitHub Pages prep step expects Zapier to remain selected until Supabase cutover is approved.")
+if backend != "supabase":
+    raise SystemExit("GitHub Pages must be built with VRAELIX_ENQUIRY_BACKEND=supabase; refusing to fall back to Zapier.")
+if config_boolean(config, "enquiryBackendVerified"):
+    raise SystemExit("Public enquiry submission must remain disabled until the backend is explicitly verified.")
+if not config_value(config, "supabaseUrl") or not config_value(config, "supabasePublishableKey"):
+    raise SystemExit("Supabase mode requires the public project URL and publishable key; refusing to publish an incomplete configuration.")
 
 # A browser-side Catch Hook is readable by every visitor. Keep it out of the
-# public artifact. The local Zapier configuration remains in the existing build.
-for name in ("zapierWebhookUrl", "supabaseUrl", "supabasePublishableKey", "turnstileSiteKey"):
+# public artifact. Supabase URL and publishable key are public client settings.
+for name in ("zapierWebhookUrl",):
     config = set_config_value(config, name, "")
 CONFIG_PATH.write_text(config, encoding="utf-8")
 
@@ -74,7 +83,10 @@ if base_path:
     url_attr = re.compile(r"(?P<prefix>\b(?:href|src|poster|action|data-desktop|data-mobile)\s*=\s*)(?P<quote>[\"'])(?P<url>/(?!/)[^\"']*)(?P=quote)", re.IGNORECASE)
 
     def prefix_internal_url(match: re.Match[str]) -> str:
-        return match.group("prefix") + match.group("quote") + base_path + match.group("url") + match.group("quote")
+        url = match.group("url")
+        if url == base_path or url.startswith(base_path + "/"):
+            return match.group(0)
+        return match.group("prefix") + match.group("quote") + base_path + url + match.group("quote")
 
 else:
     url_attr = None
@@ -108,8 +120,10 @@ for path in ROOT.rglob("*"):
         raise SystemExit("Environment file found in the GitHub Pages output; publishing stopped.")
 
 public_config = CONFIG_PATH.read_text(encoding="utf-8")
-if config_value(public_config, "zapierWebhookUrl") or config_value(public_config, "supabaseUrl") or config_value(public_config, "supabasePublishableKey"):
-    raise SystemExit("Public backend configuration was not scrubbed from the GitHub Pages output.")
+if config_value(public_config, "zapierWebhookUrl"):
+    raise SystemExit("A browser-visible Zapier endpoint remains in the GitHub Pages output.")
+if not config_value(public_config, "supabaseUrl") or not config_value(public_config, "supabasePublishableKey"):
+    raise SystemExit("The GitHub Pages Supabase public configuration is incomplete.")
 
 forbidden_markers = (
     "sb_secret_",
@@ -128,4 +142,4 @@ for path in ROOT.rglob("*"):
             raise SystemExit("A private backend credential marker was found in the GitHub Pages output.")
 
 print(f"Prepared a clean GitHub Pages static directory with {sum(1 for _ in ROOT.rglob('*.html'))} HTML routes.")
-print("Zapier remains selected in source, but its browser-visible Catch Hook is omitted from this public artifact; the quote form remains disabled until a safe server endpoint is approved.")
+print("Supabase is selected with public project configuration. Enquiry submission remains disabled until the Edge Function and protections pass approved end-to-end verification.")
