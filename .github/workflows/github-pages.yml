@@ -21,7 +21,8 @@ jobs:
       VRAELIX_SUPABASE_URL: ${{ vars.VRAELIX_SUPABASE_URL }}
       VRAELIX_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VRAELIX_SUPABASE_PUBLISHABLE_KEY }}
       VRAELIX_TURNSTILE_SITE_KEY: ${{ vars.VRAELIX_TURNSTILE_SITE_KEY }}
-      # Search indexing stays off until explicitly approved in a reviewed change.
+      # Keep indexing off until the production site and content are verified
+      # and indexing is explicitly approved in a separate reviewed change.
       VRAELIX_INDEXING_APPROVED: "false"
     steps:
       - name: Check out repository

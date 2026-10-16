@@ -9,6 +9,8 @@ import re
 
 ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", "github-pages")).resolve()
 WORKSPACE = Path.cwd().resolve()
+LIVE_OUTPUT = (WORKSPACE / "outputs" / "vraelix-live").resolve()
+IS_LIVE_OUTPUT = ROOT == LIVE_OUTPUT
 MARKER = ".vraelix-github-pages-generated"
 CONFIG_PATH = ROOT / "assets" / "site-config.js"
 
@@ -59,8 +61,16 @@ backend = config_value(config, "enquiryBackend")
 base_path = normalize_base_path(config_value(config, "siteBasePath"))
 if backend != "supabase":
     raise SystemExit("GitHub Pages must be built with VRAELIX_ENQUIRY_BACKEND=supabase; refusing to fall back to Zapier.")
-if config_boolean(config, "enquiryBackendVerified"):
+if config_boolean(config, "enquiryBackendVerified") and not IS_LIVE_OUTPUT:
     raise SystemExit("Public enquiry submission must remain disabled until the backend is explicitly verified.")
+if config_boolean(config, "enquiryStagingTestMode") and IS_LIVE_OUTPUT:
+    raise SystemExit("Staging test mode is not permitted in the live output.")
+if IS_LIVE_OUTPUT and config_boolean(config, "enquiryBackendVerified"):
+    if (
+        base_path != "/vraelix-website"
+        or config_value(config, "supabaseUrl") != "https://fqgrdfxboskdyqaipabr.supabase.co"
+    ):
+        raise SystemExit("Verified live output must target the approved VRAELIX project-site URL and Supabase project.")
 if not config_value(config, "supabaseUrl") or not config_value(config, "supabasePublishableKey"):
     raise SystemExit("Supabase mode requires the public project URL and publishable key; refusing to publish an incomplete configuration.")
 
@@ -88,6 +98,20 @@ if base_path:
             return match.group(0)
         return match.group("prefix") + match.group("quote") + base_path + url + match.group("quote")
 
+    srcset_attr = re.compile(r"(?P<prefix>\bsrcset\s*=\s*)(?P<quote>[\"'])(?P<value>[^\"']*)(?P=quote)", re.IGNORECASE)
+
+    def prefix_srcset_urls(match: re.Match[str]) -> str:
+        value = match.group("value")
+
+        def prefix_candidate(candidate: re.Match[str]) -> str:
+            url = candidate.group(0)
+            if url == base_path or url.startswith(base_path + "/"):
+                return url
+            return base_path + url
+
+        value = re.sub(r"(?<![/\w:])/(?!/)[^\s,]+", prefix_candidate, value)
+        return match.group("prefix") + match.group("quote") + value + match.group("quote")
+
 else:
     url_attr = None
 
@@ -95,6 +119,7 @@ for page in ROOT.rglob("*.html"):
     source = page.read_text(encoding="utf-8")
     if url_attr:
         source = url_attr.sub(prefix_internal_url, source)
+        source = srcset_attr.sub(prefix_srcset_urls, source)
     if csp and "http-equiv=\"Content-Security-Policy\"" not in source:
         csp_meta = '<meta http-equiv="Content-Security-Policy" content="' + escape(csp, quote=True) + '">'
         source = source.replace("</head>", csp_meta + "</head>", 1)
@@ -142,4 +167,7 @@ for path in ROOT.rglob("*"):
             raise SystemExit("A private backend credential marker was found in the GitHub Pages output.")
 
 print(f"Prepared a clean GitHub Pages static directory with {sum(1 for _ in ROOT.rglob('*.html'))} HTML routes.")
-print("Supabase is selected with public project configuration. Enquiry submission remains disabled until the Edge Function and protections pass approved end-to-end verification.")
+if config_boolean(CONFIG_PATH.read_text(encoding="utf-8"), "enquiryBackendVerified"):
+    print("Supabase is selected with public project configuration. Enquiry submission is enabled in the explicitly approved live output.")
+else:
+    print("Supabase is selected with public project configuration. Enquiry submission remains disabled until the Edge Function and protections pass approved end-to-end verification.")

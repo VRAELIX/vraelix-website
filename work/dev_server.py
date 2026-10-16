@@ -8,11 +8,13 @@ from urllib.parse import urlsplit
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 BUILD_OUTPUT = os.environ.get("VRAELIX_BUILD_OUTPUT", "outputs/vraelix-premium-site")
-if BUILD_OUTPUT not in ("outputs/vraelix-premium-site", "outputs/vraelix-staging-preview"):
+if BUILD_OUTPUT not in ("outputs/vraelix-premium-site", "outputs/vraelix-staging-preview", "outputs/vraelix-live"):
     raise ValueError("VRAELIX_BUILD_OUTPUT must select a generated VRAELIX website directory")
 ROOT = WORKSPACE / "outputs" / "vraelix-premium-site"
 if BUILD_OUTPUT == "outputs/vraelix-staging-preview":
     ROOT = WORKSPACE / "outputs" / "vraelix-staging-preview"
+elif BUILD_OUTPUT == "outputs/vraelix-live":
+    ROOT = WORKSPACE / "outputs" / "vraelix-live"
 try:
     config_text = (ROOT / "assets/site-config.js").read_text(encoding="utf-8")
 except OSError:
@@ -30,6 +32,7 @@ def config_value(name):
 
 
 backend = config_value("enquiryBackend")
+SITE_BASE_PATH = config_value("siteBasePath").rstrip("/")
 backend_verified = bool(
     re.search(r"^\s*enquiryBackendVerified:\s*true\s*,?$", config_text, re.MULTILINE)
     or re.search(r"^\s*enquiryStagingTestMode:\s*true\s*,?$", config_text, re.MULTILINE)
@@ -62,6 +65,13 @@ class Handler(SimpleHTTPRequestHandler):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
+
+    def translate_path(self, path):
+        request_path = urlsplit(path).path
+        if SITE_BASE_PATH and (request_path == SITE_BASE_PATH or request_path.startswith(SITE_BASE_PATH + "/")):
+            request_path = request_path[len(SITE_BASE_PATH):] or "/"
+            path = request_path
+        return super().translate_path(path)
 
     def end_headers(self):
         self.send_header("Content-Security-Policy", CSP)

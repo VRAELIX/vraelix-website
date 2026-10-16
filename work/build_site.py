@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 DEFAULT_ROOT = Path("outputs/vraelix-premium-site")
 STAGING_PREVIEW_ROOT = Path("outputs/vraelix-staging-preview")
+LIVE_OUTPUT_ROOT = Path("outputs/vraelix-live")
 ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", str(DEFAULT_ROOT)))
 WORKSPACE = Path.cwd().resolve()
 if ROOT.is_absolute():
@@ -20,13 +21,18 @@ if ROOT == WORKSPACE or WORKSPACE not in ROOT.parents:
     raise ValueError("VRAELIX_BUILD_OUTPUT must stay inside the project workspace")
 IS_DEFAULT_OUTPUT = ROOT == (WORKSPACE / DEFAULT_ROOT).resolve()
 IS_STAGING_PREVIEW = ROOT == (WORKSPACE / STAGING_PREVIEW_ROOT).resolve()
+IS_LIVE_OUTPUT = ROOT == (WORKSPACE / LIVE_OUTPUT_ROOT).resolve()
 DATA = json.loads(Path("work/site_data.json").read_text(encoding="utf-8"))
 SERVICES = DATA["services"]
 EMAIL = "vraelix29@gmail.com"
 INSTAGRAM = "https://www.instagram.com/mrofficial_ansh"
 LINKEDIN = "https://www.linkedin.com/company/vraelix"
 
-LOCAL_BUILD_ENV = Path(".env.staging.local" if IS_STAGING_PREVIEW else ".env.local")
+LOCAL_BUILD_ENV = Path(
+    ".env.staging.local" if IS_STAGING_PREVIEW else
+    ".env.live.local" if IS_LIVE_OUTPUT else
+    ".env.local"
+)
 BUILD_ENV_KEYS = {
     "VRAELIX_SITE_ORIGIN",
     "VRAELIX_GH_PAGES_BASE_PATH",
@@ -73,6 +79,12 @@ if STAGING_FORM_TEST_MODE_VALUE not in ("", "true", "false"):
 STAGING_FORM_TEST_MODE_REQUESTED = STAGING_FORM_TEST_MODE_VALUE == "true"
 if STAGING_FORM_TEST_MODE_REQUESTED and not IS_STAGING_PREVIEW:
     raise ValueError("Staging form test mode is limited to outputs/vraelix-staging-preview")
+
+ENQUIRY_BACKEND_VERIFIED_VALUE = os.environ.get("VRAELIX_ENQUIRY_BACKEND_VERIFIED", "").strip().lower()
+if ENQUIRY_BACKEND_VERIFIED_VALUE not in ("", "true", "false"):
+    raise ValueError("VRAELIX_ENQUIRY_BACKEND_VERIFIED must be true or false")
+if ENQUIRY_BACKEND_VERIFIED_VALUE == "true" and not IS_LIVE_OUTPUT:
+    raise ValueError("Verified live enquiry mode is limited to outputs/vraelix-live")
 
 
 def previous_generated_config_value(name):
@@ -159,9 +171,9 @@ def configured_enquiry_backend():
 SITE_ORIGIN = configured_site_origin()
 SITE_BASE_PATH = configured_site_base_path()
 GA4_MEASUREMENT_ID = configured_ga4_measurement_id()
-# Keep the visitor form closed until a backend has passed an approved
-# end-to-end verification. Re-enable only through a reviewed source change.
-ENQUIRY_BACKEND_VERIFIED = False
+# Live submission is an explicit build-time opt-in, scoped to the live output.
+# Staging and the GitHub Actions artifact remain disabled unless separately reviewed.
+ENQUIRY_BACKEND_VERIFIED = IS_LIVE_OUTPUT and ENQUIRY_BACKEND_VERIFIED_VALUE == "true"
 
 
 def site_url(path):
@@ -210,6 +222,18 @@ def configured_zapier_webhook():
 SUPABASE_PROJECT_URL, SUPABASE_PUBLISHABLE_KEY = configured_supabase_public_settings()
 ENQUIRY_BACKEND, TURNSTILE_SITE_KEY = configured_enquiry_backend()
 STAGING_PROJECT_REF = "fqgrdfxboskdyqaipabr"
+LIVE_PROJECT_REF = "fqgrdfxboskdyqaipabr"
+
+if ENQUIRY_BACKEND_VERIFIED:
+    live_project_host = f"{LIVE_PROJECT_REF}.supabase.co"
+    if (
+        ENQUIRY_BACKEND != "supabase"
+        or urlsplit(SUPABASE_PROJECT_URL).hostname != live_project_host
+        or SITE_ORIGIN != "https://vraelix.github.io"
+        or SITE_BASE_PATH != "/vraelix-website"
+        or STAGING_FORM_TEST_MODE_REQUESTED
+    ):
+        raise ValueError("Verified live enquiries require the approved VRAELIX live project and GitHub Pages origin")
 
 
 def configured_staging_form_test_mode():
