@@ -10,7 +10,10 @@ import re
 ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", "github-pages")).resolve()
 WORKSPACE = Path.cwd().resolve()
 LIVE_OUTPUT = (WORKSPACE / "outputs" / "vraelix-live").resolve()
+GITHUB_PAGES_OUTPUT = (WORKSPACE / "github-pages").resolve()
 IS_LIVE_OUTPUT = ROOT == LIVE_OUTPUT
+IS_GITHUB_PAGES_OUTPUT = ROOT == GITHUB_PAGES_OUTPUT
+VERIFIED_OUTPUT_ALLOWED = IS_LIVE_OUTPUT or IS_GITHUB_PAGES_OUTPUT
 MARKER = ".vraelix-github-pages-generated"
 CONFIG_PATH = ROOT / "assets" / "site-config.js"
 
@@ -61,18 +64,19 @@ backend = config_value(config, "enquiryBackend")
 base_path = normalize_base_path(config_value(config, "siteBasePath"))
 if backend != "supabase":
     raise SystemExit("GitHub Pages must be built with VRAELIX_ENQUIRY_BACKEND=supabase; refusing to fall back to Zapier.")
-if config_boolean(config, "enquiryBackendVerified") and not IS_LIVE_OUTPUT:
-    raise SystemExit("Public enquiry submission must remain disabled until the backend is explicitly verified.")
-if config_boolean(config, "enquiryStagingTestMode") and IS_LIVE_OUTPUT:
-    raise SystemExit("Staging test mode is not permitted in the live output.")
-if IS_LIVE_OUTPUT and config_boolean(config, "enquiryBackendVerified"):
-    if (
-        base_path != "/vraelix-website"
-        or config_value(config, "supabaseUrl") != "https://fqgrdfxboskdyqaipabr.supabase.co"
-    ):
-        raise SystemExit("Verified live output must target the approved VRAELIX project-site URL and Supabase project.")
-if not config_value(config, "supabaseUrl") or not config_value(config, "supabasePublishableKey"):
-    raise SystemExit("Supabase mode requires the public project URL and publishable key; refusing to publish an incomplete configuration.")
+verified = config_boolean(config, "enquiryBackendVerified")
+staging_test_mode = config_boolean(config, "enquiryStagingTestMode")
+if verified and not VERIFIED_OUTPUT_ALLOWED:
+    raise SystemExit("Verified enquiry submission is permitted only for the approved live or GitHub Pages output.")
+if staging_test_mode and (IS_LIVE_OUTPUT or IS_GITHUB_PAGES_OUTPUT):
+    raise SystemExit("Staging test mode is not permitted in a live or GitHub Pages output.")
+if verified and (
+    base_path != "/vraelix-website"
+    or config_value(config, "supabaseUrl") != "https://fqgrdfxboskdyqaipabr.supabase.co"
+    or not config_value(config, "supabasePublishableKey")
+    or not config_value(config, "turnstileSiteKey")
+):
+    raise SystemExit("Verified output requires the approved project URL, public key, Turnstile site key, and project-site base path.")
 
 # A browser-side Catch Hook is readable by every visitor. Keep it out of the
 # public artifact. Supabase URL and publishable key are public client settings.
@@ -147,8 +151,12 @@ for path in ROOT.rglob("*"):
 public_config = CONFIG_PATH.read_text(encoding="utf-8")
 if config_value(public_config, "zapierWebhookUrl"):
     raise SystemExit("A browser-visible Zapier endpoint remains in the GitHub Pages output.")
-if not config_value(public_config, "supabaseUrl") or not config_value(public_config, "supabasePublishableKey"):
-    raise SystemExit("The GitHub Pages Supabase public configuration is incomplete.")
+if config_boolean(public_config, "enquiryBackendVerified") and (
+    not config_value(public_config, "supabaseUrl")
+    or not config_value(public_config, "supabasePublishableKey")
+    or not config_value(public_config, "turnstileSiteKey")
+):
+    raise SystemExit("Verified GitHub Pages enquiries require all public Supabase and Turnstile settings.")
 
 forbidden_markers = (
     "sb_secret_",
@@ -168,6 +176,6 @@ for path in ROOT.rglob("*"):
 
 print(f"Prepared a clean GitHub Pages static directory with {sum(1 for _ in ROOT.rglob('*.html'))} HTML routes.")
 if config_boolean(CONFIG_PATH.read_text(encoding="utf-8"), "enquiryBackendVerified"):
-    print("Supabase is selected with public project configuration. Enquiry submission is enabled in the explicitly approved live output.")
+    print("Supabase is selected with public configuration; enquiry submission is enabled for the explicitly approved Pages build.")
 else:
-    print("Supabase is selected with public project configuration. Enquiry submission remains disabled until the Edge Function and protections pass approved end-to-end verification.")
+    print("Enquiry submission remains disabled because the build-time readiness checks were not met.")

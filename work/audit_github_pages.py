@@ -12,7 +12,10 @@ import sys
 ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", "github-pages")).resolve()
 WORKSPACE = Path.cwd().resolve()
 LIVE_OUTPUT = (WORKSPACE / "outputs" / "vraelix-live").resolve()
+GITHUB_PAGES_OUTPUT = (WORKSPACE / "github-pages").resolve()
 IS_LIVE_OUTPUT = ROOT == LIVE_OUTPUT
+IS_GITHUB_PAGES_OUTPUT = ROOT == GITHUB_PAGES_OUTPUT
+VERIFIED_OUTPUT_ALLOWED = IS_LIVE_OUTPUT or IS_GITHUB_PAGES_OUTPUT
 errors: list[str] = []
 DATA = json.loads(Path("work/site_data.json").read_text(encoding="utf-8"))
 ROUTES = [row[0] for row in DATA["pages"]] + [f"/services/{row['slug']}/" for row in DATA["services"]]
@@ -74,18 +77,21 @@ if base_path and (not base_path.startswith("/") or base_path.endswith("/") or ".
     errors.append("Invalid siteBasePath in generated configuration")
 if config_string(config, "enquiryBackend") != "supabase":
     errors.append("GitHub Pages must select Supabase explicitly; it must not fall back to Zapier")
-expected_verified = "true" if IS_LIVE_OUTPUT else "false"
-if not re.search(r'^\s*enquiryBackendVerified:\s*' + expected_verified + r'\s*,?$', config, re.MULTILINE):
-    errors.append("Enquiry submission readiness does not match this output's approved mode")
-if IS_LIVE_OUTPUT and re.search(r'^\s*enquiryStagingTestMode:\s*true\s*,?$', config, re.MULTILINE):
-    errors.append("Staging test mode must remain off in the live output")
-if IS_LIVE_OUTPUT and expected_verified == "true":
-    if base_path != "/vraelix-website" or config_string(config, "supabaseUrl") != "https://fqgrdfxboskdyqaipabr.supabase.co":
-        errors.append("Verified live output must use the approved VRAELIX project-site URL and Supabase project")
+verified = bool(re.search(r'^\s*enquiryBackendVerified:\s*true\s*,?$', config, re.MULTILINE))
+staging_test_mode = bool(re.search(r'^\s*enquiryStagingTestMode:\s*true\s*,?$', config, re.MULTILINE))
+if verified and not VERIFIED_OUTPUT_ALLOWED:
+    errors.append("Verified enquiry submission is not permitted in this output")
+if staging_test_mode and (IS_LIVE_OUTPUT or IS_GITHUB_PAGES_OUTPUT):
+    errors.append("Staging test mode must remain off in live and GitHub Pages outputs")
+if verified and (
+    base_path != "/vraelix-website"
+    or config_string(config, "supabaseUrl") != "https://fqgrdfxboskdyqaipabr.supabase.co"
+    or not config_string(config, "supabasePublishableKey")
+    or not config_string(config, "turnstileSiteKey")
+):
+    errors.append("Verified output must use the approved project URL, public key, Turnstile site key, and project-site base path")
 if config_string(config, "zapierWebhookUrl"):
     errors.append("Browser-visible Zapier endpoint remains in the public output")
-if not config_string(config, "supabaseUrl") or not config_string(config, "supabasePublishableKey"):
-    errors.append("Supabase public project URL and publishable key must be present in Supabase mode")
 
 missing = []
 for route in ROUTES:
