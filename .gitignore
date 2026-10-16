@@ -1,7 +1,5 @@
 # Local credentials and environment configuration
-.env
-.env.*
-!.env.example
+.env*
 /supabase/functions/.env
 /supabase/.temp/
 
@@ -36,6 +34,7 @@ Thumbs.db
 *.swp
 
 # Local generated site output and temporary review artifacts
+/outputs/
 /outputs/vraelix-premium-site/
 /.tmp-*
 /vraelix-form-qa-*/
@@ -43,6 +42,7 @@ Thumbs.db
 /screenshots/
 
 # Local tools, dependency installs and transient files
+/.tmp-supabase-cli-v2.120.0/
 **/node_modules/
 **/__pycache__/
 *.py[cod]
