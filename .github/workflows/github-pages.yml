@@ -22,7 +22,7 @@ jobs:
       VRAELIX_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VRAELIX_SUPABASE_PUBLISHABLE_KEY }}
       VRAELIX_TURNSTILE_SITE_KEY: ${{ vars.VRAELIX_TURNSTILE_SITE_KEY }}
       # Search indexing stays off until explicitly approved in a reviewed change.
-      VRAELIX_INDEXING_APPROVED: "true"
+      VRAELIX_INDEXING_APPROVED: "false"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
