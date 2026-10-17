@@ -348,11 +348,11 @@
       [
         [
           "How information is handled",
-          "This static website has no VRAELIX-hosted database. When you submit the Request a Quote form, your browser sends the enquiry details to Zapier. VRAELIX has configured Zapier to route those enquiries to Google Sheets for follow-up. The website uses browser storage for the privacy preference and a temporary copy used by the confirmation page. It does not use analytics or advertising pixels."
+          "In the reviewed Staging setup, the Request a Quote form sends submitted enquiry details to a Supabase Edge Function, which validates the request and stores accepted enquiries in the Supabase database. Cloudflare Turnstile verifies the form challenge, and Upstash Redis supports rate limiting. The Staging preview also uses browser storage for the privacy preference and a temporary confirmation copy. Production processing has not been verified."
         ],
         [
           "Information you may enter",
-          "The form asks for your name, email address, phone number, requested service, project description, budget, timeline and preferred contact method. Company or business name is optional. Please include only information needed to respond to your enquiry."
+          "The submitted record has 11 named fields: full name, email, company or business name (optional), requested service, phone number, preferred contact method, project description, budget (optional), timeline (optional), a site-set source label and a server-generated submission timestamp. Please include only information needed to respond to your enquiry."
         ],
         [
           "Browser storage and confirmation",
@@ -360,11 +360,19 @@
         ],
         [
           "Third-party processing",
-          "The form sends submitted information to Zapier, which VRAELIX uses to route enquiry records to Google Sheets. Zapier and Google handle information under their own terms and privacy practices. The VRAELIX website does not control those providers’ retention periods or settings."
+          "In the reviewed Staging implementation, Supabase runs the enquiry function and stores accepted enquiries. Cloudflare Turnstile provides a challenge token that the function verifies. For rate limiting, the function sends Upstash Redis a keyed hash derived from the configured client-IP header, not the enquiry fields or the raw IP value. Provider-side processing is governed by each provider’s own terms. Production processing has not been verified."
         ],
         [
           "Retention and requests",
-          "The website does not set a retention period for enquiry records in Zapier or Google Sheets. VRAELIX should review and manage retention in those connected accounts. To ask about an enquiry or request its deletion, contact vraelix29@gmail.com."
+          "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are kept as long as needed for the work and business records. Automatic deletion and backup retention settings have not been verified. You can ask to access or delete an enquiry through the contact page or at vraelix29@gmail.com; VRAELIX aims to respond within 30 days."
+        ],
+        [
+          "Who runs VRAELIX",
+          "VRAELIX is run by Ansh Kumar as a sole proprietorship. VRAELIX is not a registered company."
+        ],
+        [
+          "Your choices",
+          "You can ask to access or delete your enquiry through the contact page or by emailing vraelix29@gmail.com. VRAELIX aims to respond within 30 days."
         ],
         [
           "Privacy preference",
@@ -406,7 +414,7 @@
       [
         [
           "Cookies and browser storage",
-          "The VRAELIX website does not set analytics, advertising or personalisation cookies. It uses essential browser localStorage to remember the privacy preference and sessionStorage to keep a temporary copy of a successfully submitted enquiry for the Thank You page."
+          "This Staging preview uses localStorage to remember the privacy preference and, after a successful enquiry, sessionStorage to keep a temporary copy for the Thank You page. No analytics measurement ID is configured in this Staging build, so it does not load an analytics tag or set analytics or advertising cookies. The quote form loads Cloudflare Turnstile to request a verification token. The widget code does not request pre-clearance; Cloudflare account-level settings and other provider-controlled browser processing have not been independently verified."
         ],
         [
           "Privacy preference",
@@ -414,15 +422,15 @@
         ],
         [
           "Enquiry submission",
-          "SessionStorage itself is not sent to a server. When you submit the form, your browser sends the enquiry details to Zapier, which VRAELIX uses to route the enquiry into Google Sheets. After the form receives a successful response, a temporary copy of the submitted brief remains in the current tab session so the Thank You page can show the confirmation details."
+          "The browser sends the enquiry fields and a separate Turnstile token to the Staging Supabase Edge Function. The function validates the request, verifies the token and applies rate limiting before inserting an accepted enquiry into the Staging database; it returns success only after the insert completes. After a successful response, sessionStorage keeps a temporary copy of the brief in the current tab for the Thank You page."
         ],
         [
           "Third-party services",
-          "Zapier and Google process submitted enquiry information under their own terms and privacy practices. External links may also use their own cookies or storage when you visit those services."
+          "The Staging form uses Supabase for the function and database, Cloudflare Turnstile for the challenge, and Upstash Redis for rate limiting with a keyed hash derived from the configured client-IP header. The reviewed site code does not configure Turnstile pre-clearance; other provider-controlled browser processing has not been independently verified. External LinkedIn and Instagram links are governed by those providers’ own policies. Production behavior has not been verified."
         ],
         [
           "Retention",
-          "The website does not set the retention period for enquiry records in Zapier or Google Sheets. VRAELIX should review and manage retention in those connected accounts."
+          "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are kept as long as needed for the work and business records. Automatic deletion and backup retention settings have not been verified. For access or deletion requests, use the contact page or email vraelix29@gmail.com; VRAELIX aims to respond within 30 days."
         ]
       ]
     ],

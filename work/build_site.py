@@ -283,7 +283,23 @@ def footer():
 
 def consent_panel():
     analytics_enabled = bool(GA4_MEASUREMENT_ID)
-    if ZAPIER_WEBHOOK_URL:
+    supabase_enquiries_active = (
+        ENQUIRY_BACKEND == "supabase"
+        and (ENQUIRY_BACKEND_VERIFIED or STAGING_FORM_TEST_MODE)
+        and bool(SUPABASE_PROJECT_URL and SUPABASE_PUBLISHABLE_KEY and TURNSTILE_SITE_KEY)
+    )
+    if supabase_enquiries_active:
+        summary = (
+            "Essential browser storage remembers your privacy choice and temporarily keeps a successfully submitted "
+            "enquiry for the confirmation page. In this Staging preview, enquiries are submitted to Supabase, "
+            "verified with Cloudflare Turnstile and rate-limited through Upstash."
+        )
+        details = (
+            "The Staging form sends enquiry fields and a Turnstile token to the Supabase Edge Function. For rate "
+            "limiting, the function sends Upstash Redis a keyed hash derived from the configured client-IP header."
+        )
+        storage_detail = "localStorage remembers the privacy choice; after a successful submission, sessionStorage temporarily keeps the brief in this tab for the confirmation page."
+    elif ZAPIER_WEBHOOK_URL:
         summary = "Essential browser storage remembers your choice and temporarily keeps a submitted enquiry for the confirmation page. Submitting the form sends your details to Zapier for routing to VRAELIX."
         details = "When you submit the form, your details are sent to Zapier, which VRAELIX uses to route enquiries to Google Sheets."
         storage_detail = "Always active. It remembers this preference and temporarily stores submitted enquiry details for the confirmation page."
@@ -425,75 +441,89 @@ def render_legal(slug):
                 "processing has not been verified."
             ),
             "Information you may enter": (
-                "The form asks for your name, email address, phone number, requested service, project description, "
-                "budget, timeline and preferred contact method. Company or business name is optional. The function "
-                "also records a source label and server-generated submission time. Please include only information "
-                "needed to respond to your enquiry."
+                "The submitted record has 11 named fields: full name, email, company or business name (optional), "
+                "requested service, phone number, preferred contact method, project description, budget (optional), "
+                "timeline (optional), a site-set source label and a server-generated submission timestamp. Please "
+                "include only information needed to respond to your enquiry."
             ),
             "Third-party processing": (
                 "The Staging function uses Supabase for the function and database, Cloudflare Turnstile to verify "
-                "the challenge token, and Upstash for rate limiting. The function is coded to send a keyed hash "
-                "derived from the configured client-IP header to Upstash; it does not send enquiry fields through "
-                "Zapier or Google Sheets in this Staging build. Provider-side retention and hosting settings have "
-                "not been verified. Production processing is unverified."
+                "the challenge token, and Upstash Redis for rate limiting. For rate limiting, the function sends "
+                "Upstash a keyed hash derived from the configured client-IP header, not the enquiry fields or the "
+                "raw IP value. Provider-side processing is governed by each provider’s own terms. Production "
+                "processing has not been verified."
             ),
             "Retention and requests": (
-                "The reviewed website code does not define an enquiry-retention period. Staging database and "
-                "backup retention or deletion settings have not been verified, and Production retention is "
-                "unverified. Use synthetic details only in this preview. To ask about an enquiry or request its "
-                "deletion, contact vraelix29@gmail.com."
+                "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are "
+                "kept as long as needed for the work and business records. Automatic deletion and backup retention "
+                "settings have not been verified. You can ask to access or delete an enquiry through the contact "
+                "page or at vraelix29@gmail.com; VRAELIX aims to respond within 30 days. This preview may contain "
+                "synthetic test submissions; Production retention has not been verified."
+            ),
+            "Who runs VRAELIX": (
+                "VRAELIX is run by Ansh Kumar as a sole proprietorship. VRAELIX is not a registered company."
+            ),
+            "Your choices": (
+                "You can ask to access or delete your enquiry through the contact page or by emailing "
+                "vraelix29@gmail.com. VRAELIX aims to respond within 30 days."
             ),
         }
         sections = [(head, staging_sections.get(head, text)) for head, text in sections]
     elif IS_STAGING_PREVIEW and slug == "cookie-policy":
         staging_sections = {
             "Cookies and browser storage": (
-                "This Staging build uses localStorage to remember the privacy preference. After a successful "
-                "submission, sessionStorage keeps a copy of the entered brief in the current tab for the Thank You "
-                "page. Google Analytics 4 is not configured in this Staging build. The quote form loads Cloudflare "
-                "Turnstile when it requests a token; the reviewed website code does not configure Turnstile "
-                "pre-clearance. Provider cookie behavior and Production behavior have not been verified."
+                "This Staging preview uses localStorage to remember the privacy preference and, after a successful "
+                "enquiry, sessionStorage to keep a temporary copy for the Thank You page. No analytics measurement "
+                "ID is configured in this Staging build, so it does not load an analytics tag or set analytics or "
+                "advertising cookies. The quote form loads Cloudflare Turnstile to request a verification token; the "
+                "widget code does not request pre-clearance; Cloudflare account-level settings and other "
+                "provider-controlled browser processing have not been independently verified."
             ),
             "Enquiry submission": (
                 "In this Staging preview, the browser sends the form fields and Turnstile token to the Staging "
-                "Supabase Edge Function. If its checks pass, the function attempts to insert the enquiry into the "
-                "Staging public.enquiries table. This build does not send enquiry fields through Zapier or Google "
-                "Sheets. Production submission behavior is unverified."
+                "Supabase Edge Function. The function validates the request, verifies the token and applies rate "
+                "limiting before inserting an accepted enquiry into the Staging database. It returns success only "
+                "after the insert completes. Production submission behavior is unverified."
             ),
             "Third-party services": (
-                "The form uses Cloudflare Turnstile for its challenge and the Staging Supabase Edge Function for "
-                "submission. The function is coded to use Upstash for rate limiting, sending a keyed hash derived "
-                "from the configured client-IP header. Zapier and Google Sheets are not configured for this "
-                "Staging build. Provider cookie behavior, retention and Production configuration have not been "
-                "verified."
+                "The Staging form uses Supabase for the function and database, Cloudflare Turnstile for the "
+                "challenge, and Upstash Redis for rate limiting with a keyed hash derived from the configured "
+                "client-IP header. The widget code does not request pre-clearance; Cloudflare account-level settings "
+                "and other provider-controlled browser processing have not been independently verified. External LinkedIn and "
+                "Instagram links are governed by those providers’ own policies. Production behavior is unverified."
             ),
             "Retention": (
-                "The reviewed website code does not define a retention period. Staging database and backup "
-                "retention or deletion settings, and Production retention, have not been verified. Use synthetic "
-                "details only in this preview. Contact vraelix29@gmail.com with a data request."
+                "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are "
+                "kept as long as needed for the work and business records. Automatic deletion and backup retention "
+                "settings have not been verified. For access or deletion requests, use the contact page or email "
+                "vraelix29@gmail.com; VRAELIX aims to respond within 30 days. Production retention is unverified."
             ),
         }
         sections = [(head, staging_sections.get(head, text)) for head, text in sections]
-    elif not ZAPIER_WEBHOOK_URL and slug == "privacy":
+    elif not ENQUIRY_BACKEND_VERIFIED and not STAGING_FORM_TEST_MODE and slug == "privacy":
         analytics_summary = (
             " Optional Google Analytics 4 measurement is available only after you opt in through the privacy preferences."
             if GA4_MEASUREMENT_ID else
             " The site uses essential browser storage for the privacy preference; no analytics or advertising pixels are active."
         )
-        disabled_form_text = "The Request a Quote form is not connected in this build and does not transmit enquiry entries." + analytics_summary
+        disabled_form_text = (
+            "The Request a Quote form is disabled in this build and does not submit entries from this build. "
+            "The reviewed Staging preview uses Supabase for enquiry submission, with Cloudflare Turnstile and "
+            "Upstash rate limiting. Production processing has not been verified."
+        ) + analytics_summary
         sections = [(head, disabled_form_text if head == "How information is handled" else text) for head,text in sections]
-        sections = [(head, "The form is not connected in this build, so it does not send entries to Zapier or Google Sheets." if head == "Third-party processing" else text) for head,text in sections]
-        sections = [(head, "This build does not transmit enquiry entries or create records in Zapier or Google Sheets." if head == "Retention and requests" else text) for head,text in sections]
-    elif not ZAPIER_WEBHOOK_URL and slug == "cookie-policy":
+        sections = [(head, "This build does not submit enquiry entries. In the reviewed Staging preview, Supabase, Cloudflare Turnstile and Upstash are used for enquiry processing and rate limiting; Production processing has not been verified." if head == "Third-party processing" else text) for head,text in sections]
+        sections = [(head, "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are kept as long as needed for the work and business records. You can ask to access or delete an enquiry through the contact page or at vraelix29@gmail.com; VRAELIX aims to respond within 30 days. Automatic deletion and backup retention settings have not been verified." if head == "Retention and requests" else text) for head,text in sections]
+    elif not ENQUIRY_BACKEND_VERIFIED and not STAGING_FORM_TEST_MODE and slug == "cookie-policy":
         analytics_summary = (
             " Optional Google Analytics 4 is loaded only if you grant analytics consent."
             if GA4_MEASUREMENT_ID else
             " This site does not set analytics, advertising or personalisation cookies."
         )
-        sections = [(head, "The Request a Quote form is not connected in this build and does not send enquiry entries." + analytics_summary if head == "Cookies and browser storage" else text) for head,text in sections]
-        sections = [(head, "The form is not connected in this build, so it does not send entries to Zapier or Google Sheets." if head == "Enquiry submission" else text) for head,text in sections]
-        sections = [(head, "No enquiry form entries are sent to Zapier or Google Sheets in this build." if head == "Third-party services" else text) for head,text in sections]
-        sections = [(head, "This build does not transmit enquiry entries or create records in Zapier or Google Sheets." if head == "Retention" else text) for head,text in sections]
+        sections = [(head, "This build uses localStorage to remember the privacy preference. It does not accept new enquiries here; successful submissions in the reviewed Staging preview use temporary sessionStorage for the Thank You page." + analytics_summary if head == "Cookies and browser storage" else text) for head,text in sections]
+        sections = [(head, "The Request a Quote form is disabled in this build. In the reviewed Staging preview, the browser sends the enquiry fields and Turnstile token to the Supabase Edge Function, which validates and inserts accepted enquiries." if head == "Enquiry submission" else text) for head,text in sections]
+        sections = [(head, "This build does not submit form entries. The reviewed Staging preview uses Supabase, Cloudflare Turnstile and Upstash Redis for enquiry processing and rate limiting. External LinkedIn and Instagram links follow those providers’ own policies; Production behavior is unverified." if head == "Third-party services" else text) for head,text in sections]
+        sections = [(head, "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are kept as long as needed for the work and business records. For access or deletion requests, use the contact page or email vraelix29@gmail.com; VRAELIX aims to respond within 30 days. Automatic deletion and backup retention settings have not been verified." if head == "Retention" else text) for head,text in sections]
     if not IS_STAGING_PREVIEW and GA4_MEASUREMENT_ID and slug == "privacy":
         form_text = (
             "When you submit the Request a Quote form, your browser sends the enquiry details to Zapier, which VRAELIX uses to route records to Google Sheets."
@@ -525,11 +555,19 @@ def render_legal(slug):
                 provider_links.append('<a href="https://zapier.com/privacy" target="_blank" rel="noopener noreferrer">Zapier Privacy Policy</a>')
             if GA4_MEASUREMENT_ID:
                 provider_links.append('<a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>')
+            if IS_STAGING_PREVIEW and head in ("Third-party processing", "Third-party services"):
+                provider_links.append('<a href="https://www.cloudflare.com/turnstile-privacy-policy/" target="_blank" rel="noopener noreferrer">Cloudflare Turnstile Privacy Addendum</a>')
             if provider_links:
                 paragraph += " Review " + " and ".join(provider_links) + "."
         blocks.append(f'<h2>{esc(head)}</h2><p>{paragraph}</p>')
     content = "".join(blocks)
-    return page_intro("VRAELIX", "Legal", f'{esc(title)}<br><em>at VRAELIX.</em>', "This page explains the basic terms for this static website. Please read it alongside the information relevant to your use.") + f'''<section class="section legal-content"><div class="wrap legal-wrap"><p class="eyebrow">Website information</p>{content}<p class="legal-updated">Last reviewed: 8 October 2026</p><a class="text-link" href="/contact/">Contact VRAELIX <span aria-hidden="true">↗</span></a></div></section>'''
+    reviewed = "17 October 2026" if slug in ("privacy", "cookie-policy") else "8 October 2026"
+    intro = (
+        "This page explains how VRAELIX handles enquiry information, browser storage and related services."
+        if slug in ("privacy", "cookie-policy") else
+        "This page explains the basic terms for this static website. Please read it alongside the information relevant to your use."
+    )
+    return page_intro("VRAELIX", "Legal", f'{esc(title)}<br><em>at VRAELIX.</em>', intro) + f'''<section class="section legal-content"><div class="wrap legal-wrap"><p class="eyebrow">Website information</p>{content}<p class="legal-updated">Last reviewed: {reviewed}</p><a class="text-link" href="/contact/">Contact VRAELIX <span aria-hidden="true">↗</span></a></div></section>'''
 
 def jsonld(path,title,description,service=None,faqs=None):
     if not INDEXING_APPROVED or not SITE_ORIGIN or path == "/thank-you/":
