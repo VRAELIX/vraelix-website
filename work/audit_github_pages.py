@@ -11,6 +11,11 @@ import sys
 
 ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", "github-pages")).resolve()
 WORKSPACE = Path.cwd().resolve()
+LIVE_OUTPUT = (WORKSPACE / "outputs" / "vraelix-live").resolve()
+GITHUB_PAGES_OUTPUT = (WORKSPACE / "github-pages").resolve()
+IS_LIVE_OUTPUT = ROOT == LIVE_OUTPUT
+IS_GITHUB_PAGES_OUTPUT = ROOT == GITHUB_PAGES_OUTPUT
+VERIFIED_OUTPUT_ALLOWED = IS_LIVE_OUTPUT or IS_GITHUB_PAGES_OUTPUT
 errors: list[str] = []
 DATA = json.loads(Path("work/site_data.json").read_text(encoding="utf-8"))
 ROUTES = [row[0] for row in DATA["pages"]] + [f"/services/{row['slug']}/" for row in DATA["services"]]
@@ -72,12 +77,21 @@ if base_path and (not base_path.startswith("/") or base_path.endswith("/") or ".
     errors.append("Invalid siteBasePath in generated configuration")
 if config_string(config, "enquiryBackend") != "supabase":
     errors.append("GitHub Pages must select Supabase explicitly; it must not fall back to Zapier")
-if not re.search(r'^\s*enquiryBackendVerified:\s*false\s*,?$', config, re.MULTILINE):
-    errors.append("GitHub Pages must keep enquiry submission disabled pending approved verification")
+verified = bool(re.search(r'^\s*enquiryBackendVerified:\s*true\s*,?$', config, re.MULTILINE))
+staging_test_mode = bool(re.search(r'^\s*enquiryStagingTestMode:\s*true\s*,?$', config, re.MULTILINE))
+if verified and not VERIFIED_OUTPUT_ALLOWED:
+    errors.append("Verified enquiry submission is not permitted in this output")
+if staging_test_mode and (IS_LIVE_OUTPUT or IS_GITHUB_PAGES_OUTPUT):
+    errors.append("Staging test mode must remain off in live and GitHub Pages outputs")
+if verified and (
+    base_path != "/vraelix-website"
+    or config_string(config, "supabaseUrl") != "https://fqgrdfxboskdyqaipabr.supabase.co"
+    or not config_string(config, "supabasePublishableKey")
+    or not config_string(config, "turnstileSiteKey")
+):
+    errors.append("Verified output must use the approved project URL, public key, Turnstile site key, and project-site base path")
 if config_string(config, "zapierWebhookUrl"):
     errors.append("Browser-visible Zapier endpoint remains in the public output")
-if not config_string(config, "supabaseUrl") or not config_string(config, "supabasePublishableKey"):
-    errors.append("Supabase public project URL and publishable key must be present in Supabase mode")
 
 missing = []
 for route in ROUTES:
@@ -89,19 +103,23 @@ for route in ROUTES:
     doc.feed(path.read_text(encoding="utf-8"))
     ids = {attrs.get("id") for _, attrs in doc.tags if attrs.get("id")}
     for tag, attrs in doc.tags:
-        for attr in ("href", "src", "poster", "action", "data-desktop", "data-mobile"):
-            value = attrs.get(attr, "").strip()
-            if value.startswith("#"):
-                if value[1:] and value[1:] not in ids:
-                    errors.append(f"{route}: broken fragment link {value}")
-                continue
-            kind, target = local_target(value, base_path, route)
-            if kind == "unprefixed":
-                errors.append(f"{route}: local URL is missing the GitHub Pages base path ({attr})")
-            elif kind in ("route", "asset") and target and not target.is_file():
-                errors.append(f"{route}: local {attr} target is missing ({target.relative_to(ROOT).as_posix()})")
-            if tag == "img" and attr == "src" and "alt" not in attrs:
-                errors.append(f"{route}: image is missing alt text")
+        for attr in ("href", "src", "srcset", "poster", "action", "data-desktop", "data-mobile"):
+            raw_value = attrs.get(attr, "").strip()
+            values = [candidate.strip().split()[0] for candidate in raw_value.split(",") if candidate.strip()] if attr == "srcset" else [raw_value]
+            for value in values:
+                if not value:
+                    continue
+                if value.startswith("#"):
+                    if value[1:] and value[1:] not in ids:
+                        errors.append(f"{route}: broken fragment link {value}")
+                    continue
+                kind, target = local_target(value, base_path, route)
+                if kind == "unprefixed":
+                    errors.append(f"{route}: local URL is missing the GitHub Pages base path ({attr})")
+                elif kind in ("route", "asset") and target and not target.is_file():
+                    errors.append(f"{route}: local {attr} target is missing ({target.relative_to(ROOT).as_posix()})")
+                if tag == "img" and attr == "src" and "alt" not in attrs:
+                    errors.append(f"{route}: image is missing alt text")
 
     html = path.read_text(encoding="utf-8")
     if not html.lstrip().lower().startswith("<!doctype html>"):
@@ -112,6 +130,13 @@ for route in ROUTES:
         path_value = attr.group(1)
         if base_path and not (path_value == base_path or path_value.startswith(base_path + "/")):
             errors.append(f"{route}: root-absolute URL is not prefixed for project-site hosting")
+            break
+    for srcset in re.finditer(r'\bsrcset=["\']([^"\']*)["\']', html, re.I):
+        candidates = [candidate.strip().split()[0] for candidate in srcset.group(1).split(",") if candidate.strip()]
+        if base_path and any(candidate.startswith("/") and not candidate.startswith("//")
+                             and not (candidate == base_path or candidate.startswith(base_path + "/"))
+                             for candidate in candidates):
+            errors.append(f"{route}: root-absolute srcset URL is not prefixed for project-site hosting")
             break
 
 for filename in ("_headers", "_redirects"):

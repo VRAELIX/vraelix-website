@@ -10,6 +10,8 @@ from urllib.parse import urlsplit
 
 DEFAULT_ROOT = Path("outputs/vraelix-premium-site")
 STAGING_PREVIEW_ROOT = Path("outputs/vraelix-staging-preview")
+LIVE_OUTPUT_ROOT = Path("outputs/vraelix-live")
+GITHUB_PAGES_ROOT = Path("github-pages")
 ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", str(DEFAULT_ROOT)))
 WORKSPACE = Path.cwd().resolve()
 if ROOT.is_absolute():
@@ -20,13 +22,20 @@ if ROOT == WORKSPACE or WORKSPACE not in ROOT.parents:
     raise ValueError("VRAELIX_BUILD_OUTPUT must stay inside the project workspace")
 IS_DEFAULT_OUTPUT = ROOT == (WORKSPACE / DEFAULT_ROOT).resolve()
 IS_STAGING_PREVIEW = ROOT == (WORKSPACE / STAGING_PREVIEW_ROOT).resolve()
+IS_LIVE_OUTPUT = ROOT == (WORKSPACE / LIVE_OUTPUT_ROOT).resolve()
+IS_GITHUB_PAGES_OUTPUT = ROOT == (WORKSPACE / GITHUB_PAGES_ROOT).resolve()
 DATA = json.loads(Path("work/site_data.json").read_text(encoding="utf-8"))
 SERVICES = DATA["services"]
 EMAIL = "vraelix29@gmail.com"
 INSTAGRAM = "https://www.instagram.com/mrofficial_ansh"
 LINKEDIN = "https://www.linkedin.com/company/vraelix"
 
-LOCAL_BUILD_ENV = Path(".env.staging.local" if IS_STAGING_PREVIEW else ".env.local")
+LOCAL_BUILD_ENV = (
+    Path(".env.staging.local") if IS_STAGING_PREVIEW else
+    Path(".env.live.local") if IS_LIVE_OUTPUT else
+    None if IS_GITHUB_PAGES_OUTPUT else
+    Path(".env.local")
+)
 BUILD_ENV_KEYS = {
     "VRAELIX_SITE_ORIGIN",
     "VRAELIX_GH_PAGES_BASE_PATH",
@@ -43,7 +52,7 @@ BUILD_ENV_KEYS = {
 
 def load_local_build_env():
     """Load only documented build settings without printing their values."""
-    if not LOCAL_BUILD_ENV.is_file():
+    if LOCAL_BUILD_ENV is None or not LOCAL_BUILD_ENV.is_file():
         return
     for raw_line in LOCAL_BUILD_ENV.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -74,6 +83,11 @@ STAGING_FORM_TEST_MODE_REQUESTED = STAGING_FORM_TEST_MODE_VALUE == "true"
 if STAGING_FORM_TEST_MODE_REQUESTED and not IS_STAGING_PREVIEW:
     raise ValueError("Staging form test mode is limited to outputs/vraelix-staging-preview")
 
+ENQUIRY_BACKEND_VERIFIED_VALUE = os.environ.get("VRAELIX_ENQUIRY_BACKEND_VERIFIED", "").strip().lower()
+if ENQUIRY_BACKEND_VERIFIED_VALUE not in ("", "true", "false"):
+    raise ValueError("VRAELIX_ENQUIRY_BACKEND_VERIFIED must be true or false")
+ENQUIRY_BACKEND_VERIFICATION_REQUESTED = ENQUIRY_BACKEND_VERIFIED_VALUE == "true"
+
 
 def previous_generated_config_value(name):
     """Read a value from the current generated config as a local build fallback."""
@@ -91,15 +105,11 @@ def previous_generated_config_value(name):
 def configured_supabase_public_settings():
     project_url = os.environ.get("VRAELIX_SUPABASE_URL", "").strip().rstrip("/")
     publishable_key = os.environ.get("VRAELIX_SUPABASE_PUBLISHABLE_KEY", "").strip()
-    if bool(project_url) != bool(publishable_key):
-        raise ValueError("Set both VRAELIX_SUPABASE_URL and VRAELIX_SUPABASE_PUBLISHABLE_KEY, or leave both empty")
-    if not project_url:
-        return "", ""
-
-    parsed = urlsplit(project_url)
-    if (parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment
-            or parsed.username or parsed.password):
-        raise ValueError("VRAELIX_SUPABASE_URL must be an HTTPS project origin without a path or credentials")
+    if project_url:
+        parsed = urlsplit(project_url)
+        if (parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment
+                or parsed.username or parsed.password):
+            raise ValueError("VRAELIX_SUPABASE_URL must be an HTTPS project origin without a path or credentials")
 
     is_privileged = publishable_key.startswith("sb_secret_")
     parts = publishable_key.split(".")
@@ -112,6 +122,10 @@ def configured_supabase_public_settings():
             pass
     if is_privileged:
         raise ValueError("VRAELIX_SUPABASE_PUBLISHABLE_KEY must not contain a secret or service-role key")
+    # An incomplete public pair cannot configure a usable browser client.
+    # Keep the artifact buildable, but fail closed so the form stays disabled.
+    if not project_url or not publishable_key:
+        return "", ""
     return project_url, publishable_key
 
 def configured_site_origin():
@@ -150,20 +164,11 @@ def configured_enquiry_backend():
     site_key = os.environ.get("VRAELIX_TURNSTILE_SITE_KEY", "").strip()
     if site_key and not re.fullmatch(r"[A-Za-z0-9_-]{10,200}", site_key):
         raise ValueError("VRAELIX_TURNSTILE_SITE_KEY has an invalid format")
-    if backend == "supabase" and (not SUPABASE_PROJECT_URL or not SUPABASE_PUBLISHABLE_KEY):
-        raise ValueError("Supabase mode requires VRAELIX_SUPABASE_URL and VRAELIX_SUPABASE_PUBLISHABLE_KEY")
-    if backend == "supabase" and (ENQUIRY_BACKEND_VERIFIED or STAGING_FORM_TEST_MODE_REQUESTED) and not site_key:
-        raise ValueError("A verified Supabase form requires VRAELIX_TURNSTILE_SITE_KEY")
     return backend, site_key
 
 SITE_ORIGIN = configured_site_origin()
 SITE_BASE_PATH = configured_site_base_path()
 GA4_MEASUREMENT_ID = configured_ga4_measurement_id()
-# Keep the visitor form closed until a backend has passed an approved
-# end-to-end verification. Re-enable only through a reviewed source change.
-ENQUIRY_BACKEND_VERIFIED = False
-
-
 def site_url(path):
     if not SITE_ORIGIN:
         return ""
@@ -210,6 +215,21 @@ def configured_zapier_webhook():
 SUPABASE_PROJECT_URL, SUPABASE_PUBLISHABLE_KEY = configured_supabase_public_settings()
 ENQUIRY_BACKEND, TURNSTILE_SITE_KEY = configured_enquiry_backend()
 STAGING_PROJECT_REF = "fqgrdfxboskdyqaipabr"
+LIVE_PROJECT_REF = "fqgrdfxboskdyqaipabr"
+
+VERIFIED_ENQUIRY_OUTPUT_ALLOWED = IS_LIVE_OUTPUT or IS_GITHUB_PAGES_OUTPUT
+ENQUIRY_BACKEND_VERIFIED = bool(
+    ENQUIRY_BACKEND_VERIFICATION_REQUESTED
+    and VERIFIED_ENQUIRY_OUTPUT_ALLOWED
+    and ENQUIRY_BACKEND == "supabase"
+    and SUPABASE_PROJECT_URL
+    and SUPABASE_PUBLISHABLE_KEY
+    and TURNSTILE_SITE_KEY
+    and urlsplit(SUPABASE_PROJECT_URL).hostname == f"{LIVE_PROJECT_REF}.supabase.co"
+    and SITE_ORIGIN == "https://vraelix.github.io"
+    and SITE_BASE_PATH == "/vraelix-website"
+    and not STAGING_FORM_TEST_MODE_REQUESTED
+)
 
 
 def configured_staging_form_test_mode():

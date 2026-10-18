@@ -18,10 +18,13 @@ jobs:
     env:
       VRAELIX_GA4_MEASUREMENT_ID: ${{ vars.VRAELIX_GA4_MEASUREMENT_ID }}
       VRAELIX_ENQUIRY_BACKEND: supabase
-      VRAELIX_SUPABASE_URL: ${{ secrets.VRAELIX_SUPABASE_URL }}
-      VRAELIX_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VRAELIX_SUPABASE_PUBLISHABLE_KEY }}
+      VRAELIX_SUPABASE_URL: ${{ vars.VRAELIX_SUPABASE_URL }}
+      VRAELIX_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VRAELIX_SUPABASE_PUBLISHABLE_KEY }}
       VRAELIX_TURNSTILE_SITE_KEY: ${{ vars.VRAELIX_TURNSTILE_SITE_KEY }}
-      # Search indexing stays off until explicitly approved in a reviewed change.
+      # Approved after two HTTP 201 staging submissions and verified inserts on 2026-10-13.
+      VRAELIX_ENQUIRY_BACKEND_VERIFIED: "true"
+      # Keep indexing off until the production site and content are verified
+      # and indexing is explicitly approved in a separate reviewed change.
       VRAELIX_INDEXING_APPROVED: "false"
     steps:
       - name: Check out repository

@@ -8,11 +8,13 @@ import base64
 import http.client
 import argparse
 import json
+import os
 import re
 import xml.etree.ElementTree as ET
 
-ROOT = Path("outputs/vraelix-premium-site")
+ROOT = Path(os.environ.get("VRAELIX_BUILD_OUTPUT", "outputs/vraelix-premium-site"))
 DATA = json.loads(Path("work/site_data.json").read_text(encoding="utf-8"))
+INDEXING_APPROVED = os.environ.get("VRAELIX_INDEXING_APPROVED", "").strip().lower() == "true"
 EXPECTED = [row[0] for row in DATA["pages"]] + [f'/services/{row["slug"]}/' for row in DATA["services"]]
 PUBLIC_INDEXABLE = [route for route in EXPECTED if route != "/thank-you/"]
 ORIGIN = ""
@@ -262,8 +264,11 @@ def check_pages() -> tuple[dict[str, Page], dict[str, list[str]]]:
         robots = meta_content(page, "robots").lower()
         if route == "/thank-you/" and "noindex" not in robots:
             errors.append("Thank-you route must be noindex")
-        if route != "/thank-you/" and "noindex" in robots:
-            errors.append(f"{route}: public content route unexpectedly marked noindex")
+        if route != "/thank-you/":
+            if INDEXING_APPROVED and "noindex" in robots:
+                errors.append(f"{route}: approved public content route is unexpectedly marked noindex")
+            if not INDEXING_APPROVED and "noindex" not in robots:
+                errors.append(f"{route}: content route must remain noindex until explicitly approved")
         if ORIGIN and (meta_property(page, "og:url") != ORIGIN + route or meta_property(page, "og:image") != ORIGIN + "/assets/hero-poster.png"):
             errors.append(f"{route}: Open Graph URLs should use the verified absolute origin")
         if not any(tag == "meta" and a.get("name") == "twitter:card" for tag, a in page.tags):
