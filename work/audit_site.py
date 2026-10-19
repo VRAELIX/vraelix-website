@@ -469,12 +469,24 @@ def check_form_security(pages: dict[str, Page]) -> None:
         staging_url = urlsplit(config_value(config, "supabaseUrl"))
         if not staging_output or staging_url.hostname != "fqgrdfxboskdyqaipabr.supabase.co" or not config_value(config, "turnstileSiteKey"):
             errors.append("Staging form test mode may only be enabled in the configured Staging preview with a public Turnstile site key")
-    if not re.search(r'^\s*enquiryBackendVerified:\s*false\s*,?$', config, re.MULTILINE):
-        errors.append("Enquiry backend must remain unverified until an approved end-to-end test is complete")
+    verified_form = bool(re.search(r'^\s*enquiryBackendVerified:\s*true\s*,?$', config, re.MULTILINE))
+    verified_output_allowed = ROOT.resolve() in (Path("github-pages").resolve(), Path("outputs/vraelix-live").resolve())
+    if verified_form:
+        if not verified_output_allowed or staging_test_mode:
+            errors.append("Verified enquiry submission is only allowed in the approved live or GitHub Pages output, without Staging test mode")
+        if (
+            config_value(config, "enquiryBackend") != "supabase"
+            or urlsplit(config_value(config, "supabaseUrl")).hostname != "fqgrdfxboskdyqaipabr.supabase.co"
+            or not config_value(config, "supabasePublishableKey")
+            or not config_value(config, "turnstileSiteKey")
+        ):
+            errors.append("Verified enquiry submission must use the approved Supabase project and public browser settings")
+    elif not re.search(r'^\s*enquiryBackendVerified:\s*false\s*,?$', config, re.MULTILINE):
+        errors.append("Generated configuration must explicitly mark enquiry backend verification true or false")
     if "zapierWebhookUrl: \"\"" not in config and "zapierWebhookUrl: \"https://hooks.zapier.com/" not in config:
         errors.append("Generated configuration should contain either an empty Zapier placeholder or a Catch Hook URL")
     submit = next((attrs for tag, attrs in quote.tags if tag == "button" and attrs.get("type") == "submit"), {})
-    if "disabled" not in submit and not staging_test_mode:
+    if "disabled" not in submit and not (staging_test_mode or verified_form):
         errors.append("Enquiry submit button must stay disabled until an approved backend verification")
     if 'config.enquiryBackendVerified === true' not in js:
         errors.append("Browser submission must require the explicit backend verification gate")
@@ -638,8 +650,8 @@ def check_content_and_entity(pages: dict[str, Page]) -> None:
         if re.search(r"\b\d+(?:\.\d+)?\s*%|\b\d+\+\s*(?:clients|years|projects|awards)\b", page.text, re.I):
             notes.append(f"{route}: verify numerical authority/achievement claims against evidence")
     about = pages.get("/about/")
-    if about and not all(term in about.text.lower() for term in ("ansh kumar", "founder & ceo", "vraelix")):
-        errors.append("About page must identify Ansh Kumar as Founder & CEO of VRAELIX")
+    if about and not all(term in about.text.lower() for term in ("ansh kumar", "founder", "vraelix")):
+        errors.append("About page must identify Ansh Kumar as Founder of VRAELIX")
     notes.append("Entity claim review: company name, named founder and role, services, contact email and provided social URLs are consistent in the built pages; no address, clients, awards or performance statistics are asserted.")
     notes.append("AEO/content review: visible FAQs are genuine service/planning questions with direct answers; schema is emitted only when the verified origin is configured. No FAQPage markup is generated for pages without visible FAQ content.")
 

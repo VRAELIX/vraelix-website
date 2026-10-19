@@ -158,16 +158,23 @@
   const consentPanel = document.querySelector("[data-consent-panel]");
   if (consentPanel) {
     const consentKey = "vraelix-cookie-consent-v2";
+    const noticeVisitKey = "vraelix-privacy-notice-acknowledged-v1";
     const measurementId = typeof config.ga4MeasurementId === "string" && /^G-[A-Z0-9]{5,20}$/.test(config.ga4MeasurementId)
       ? config.ga4MeasurementId : "";
     const manageButton = consentPanel.querySelector("[data-consent-manage]");
     const management = consentPanel.querySelector("[data-consent-management]");
     const saveButton = consentPanel.querySelector("[data-consent-save]");
+    const closeButton = consentPanel.querySelector("[data-consent-close]");
     const analyticsInput = consentPanel.querySelector("[data-consent-analytics]");
     let externalTrigger = null;
+    let returnFocus = null;
     let savedChoice = null;
-    let manuallyOpened = false;
-    let heroObserver = null;
+    let autoNoticePending = true;
+    let autoNoticeVisible = false;
+    let manualNoticeOpen = false;
+    try {
+      autoNoticePending = sessionStorage.getItem(noticeVisitKey) !== "true";
+    } catch (_) {}
     try {
       const stored = localStorage.getItem(consentKey);
       if (stored) {
@@ -224,33 +231,53 @@
     };
     if (savedChoice) applyAnalytics(savedChoice.analytics);
 
-    if (!savedChoice) {
-      const homeHero = document.body.dataset.route === "/" && document.querySelector(".hero");
-      if (homeHero && "IntersectionObserver" in window) {
-        heroObserver = new IntersectionObserver((entries) => {
-          if (savedChoice || manuallyOpened) return;
-          consentPanel.hidden = entries[0].isIntersecting;
-        });
-        heroObserver.observe(homeHero);
-      } else {
-        consentPanel.hidden = false;
+    const updateReservedSpace = () => {
+      if (consentPanel.hidden) {
+        document.body.classList.remove("consent-notice-open");
+        document.body.style.removeProperty("--consent-notice-space");
+        return;
       }
-    }
-
+      const panelHeight = Math.ceil(consentPanel.getBoundingClientRect().height);
+      document.body.style.setProperty("--consent-notice-space", `${panelHeight + 24}px`);
+      document.body.classList.add("consent-notice-open");
+    };
     const showManagement = (show, moveFocus) => {
       management.hidden = !show;
       consentPanel.classList.toggle("is-managing", show);
       manageButton.setAttribute("aria-expanded", String(show));
       if (analyticsInput) analyticsInput.checked = Boolean(savedChoice && savedChoice.analytics);
       if (moveFocus) (show ? saveButton : manageButton).focus({ preventScroll: true });
+      window.requestAnimationFrame(updateReservedSpace);
+    };
+    const acknowledgeNotice = () => {
+      autoNoticePending = false;
+      try { sessionStorage.setItem(noticeVisitKey, "true"); } catch (_) {}
+    };
+    const updateAutoNotice = () => {
+      if (manualNoticeOpen) {
+        updateReservedSpace();
+        return;
+      }
+      if (autoNoticePending) {
+        consentPanel.hidden = false;
+        autoNoticeVisible = true;
+      } else if (autoNoticeVisible) {
+        consentPanel.hidden = true;
+        autoNoticeVisible = false;
+      }
+      updateReservedSpace();
     };
     const closePanel = () => {
       consentPanel.hidden = true;
       showManagement(false, false);
-      if (externalTrigger) {
-        externalTrigger.focus({ preventScroll: true });
-        externalTrigger = null;
-      }
+      manualNoticeOpen = false;
+      autoNoticeVisible = false;
+      acknowledgeNotice();
+      updateReservedSpace();
+      const target = externalTrigger || (consentPanel.contains(document.activeElement) ? returnFocus : null);
+      externalTrigger = null;
+      returnFocus = null;
+      if (target && target.isConnected && typeof target.focus === "function") target.focus({ preventScroll: true });
     };
     const savePreference = (analytics) => {
       const choice = { version: 2, analytics: Boolean(measurementId && analytics) };
@@ -260,26 +287,39 @@
       closePanel();
     };
 
-    consentPanel.querySelector("[data-consent-accept]").addEventListener("click", () => savePreference(Boolean(measurementId)));
+    consentPanel.addEventListener("focusin", (event) => {
+      if (event.relatedTarget && !consentPanel.contains(event.relatedTarget)) returnFocus = event.relatedTarget;
+    });
+    consentPanel.querySelector("[data-consent-accept]").addEventListener("click", closePanel);
     saveButton.addEventListener("click", () => savePreference(Boolean(analyticsInput && analyticsInput.checked)));
     manageButton.addEventListener("click", () => showManagement(true, true));
     consentPanel.querySelector("[data-consent-back]").addEventListener("click", () => showManagement(false, true));
     document.querySelectorAll("[data-consent-open]").forEach((trigger) => {
       trigger.addEventListener("click", () => {
         externalTrigger = trigger;
-        manuallyOpened = true;
+        manualNoticeOpen = true;
+        autoNoticeVisible = false;
         consentPanel.hidden = false;
-        showManagement(true, true);
+        showManagement(true, false);
+        window.requestAnimationFrame(() => {
+          const panelHeight = consentPanel.getBoundingClientRect().height;
+          if (trigger.closest(".site-footer")) {
+            window.scrollBy({ top: Math.ceil(panelHeight + 24), behavior: "auto" });
+          }
+          saveButton.focus({ preventScroll: true });
+        });
       });
     });
+    closeButton.addEventListener("click", closePanel);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !consentPanel.hidden && !management.hidden) {
+      if (event.key === "Escape" && !consentPanel.hidden) {
         event.preventDefault();
-        showManagement(false, true);
+        closePanel();
       }
     });
+    window.addEventListener("resize", updateReservedSpace);
+    updateAutoNotice();
   }
-
   const icons = {
     linkedin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM3.56 9h3.56v11.45H3.56V9Z"/></svg>',
     instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17.6" cy="6.6" r="1.1" fill="currentColor"/></svg>'

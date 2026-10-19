@@ -303,45 +303,55 @@ def footer():
 
 def consent_panel():
     analytics_enabled = bool(GA4_MEASUREMENT_ID)
-    supabase_enquiries_active = (
-        ENQUIRY_BACKEND == "supabase"
-        and (ENQUIRY_BACKEND_VERIFIED or STAGING_FORM_TEST_MODE)
-        and bool(SUPABASE_PROJECT_URL and SUPABASE_PUBLISHABLE_KEY and TURNSTILE_SITE_KEY)
+    form_submission_active = (
+        (ENQUIRY_BACKEND_VERIFIED or STAGING_FORM_TEST_MODE)
+        and (
+            bool(SUPABASE_PROJECT_URL and SUPABASE_PUBLISHABLE_KEY and TURNSTILE_SITE_KEY)
+            if ENQUIRY_BACKEND == "supabase" else bool(ZAPIER_WEBHOOK_URL)
+        )
     )
-    if supabase_enquiries_active:
-        summary = (
-            "Essential browser storage remembers your privacy choice and temporarily keeps a successfully submitted "
-            "enquiry for the confirmation page. In this Staging preview, enquiries are submitted to Supabase, "
-            "verified with Cloudflare Turnstile and rate-limited through Upstash."
+    if form_submission_active:
+        storage_sentence = "We use essential browser storage for your preferences and temporary form confirmation"
+    else:
+        storage_sentence = "We use essential browser storage for your preferences"
+    if analytics_enabled:
+        storage_sentence += "; analytics and marketing cookies stay off unless you opt into analytics in Preferences."
+        analytics_option = '<label class="consent-analytics-option"><input type="checkbox" data-consent-analytics><span><strong>Optional analytics</strong><span>Allow Google Analytics 4 usage measurement. You can change this choice later in the footer.</span></span></label>'
+    else:
+        storage_sentence += "; no analytics or marketing cookies are active."
+        analytics_option = ""
+    if form_submission_active and ENQUIRY_BACKEND == "supabase":
+        submission_sentence = (
+            "If you send an enquiry, your details go to VRAELIX’s Supabase database, and Cloudflare Turnstile helps block bots."
         )
         details = (
-            "The Staging form sends enquiry fields and a Turnstile token to the Supabase Edge Function. For rate "
-            "limiting, the function sends Upstash Redis a keyed hash derived from the configured client-IP header."
+            "Accepted enquiries are validated by the Supabase Edge Function, checked with Cloudflare Turnstile and "
+            "rate-limited before the database insert."
         )
-        storage_detail = "localStorage remembers the privacy choice; after a successful submission, sessionStorage temporarily keeps the brief in this tab for the confirmation page."
-    elif ZAPIER_WEBHOOK_URL:
-        summary = "Essential browser storage remembers your choice and temporarily keeps a submitted enquiry for the confirmation page. Submitting the form sends your details to Zapier for routing to VRAELIX."
-        details = "When you submit the form, your details are sent to Zapier, which VRAELIX uses to route enquiries to Google Sheets."
-        storage_detail = "Always active. It remembers this preference and temporarily stores submitted enquiry details for the confirmation page."
+        storage_detail = (
+            "localStorage stores your privacy and optional analytics preferences. sessionStorage stores whether you "
+            "acknowledged this notice in the current tab session and, after a successful submission, temporarily keeps "
+            "the brief for the confirmation page."
+        )
+    elif form_submission_active:
+        submission_sentence = "If you send an enquiry, your details go to VRAELIX through its configured enquiry service."
+        details = "The form sends your submission to the configured enquiry service for VRAELIX."
+        storage_detail = (
+            "localStorage stores your privacy preference; sessionStorage records your notice acknowledgement for this tab session."
+        )
     else:
-        summary = "Essential browser storage remembers your choice. This build's enquiry form is not connected and does not send entries."
-        details = "Only essential browser storage is active, and this unconfigured build does not send enquiry form entries."
-        storage_detail = "Always active. It remembers this preference. No enquiry entries are stored in this unconfigured preview."
-    if analytics_enabled:
-        summary += " Optional Google Analytics helps VRAELIX understand site usage and is loaded only if you choose analytics."
-        analytics_option = '<label class="consent-analytics-option"><input type="checkbox" data-consent-analytics><span><strong>Optional analytics</strong><span>Allow Google Analytics 4 usage measurement. You can change this choice later in the footer.</span></span></label>'
-        accept_label = "Accept all"
-    else:
-        summary += " No analytics or marketing cookies are active."
-        analytics_option = ""
-        accept_label = "Accept essential"
-    return '''<aside class="consent-panel" data-consent-panel aria-labelledby="consent-title" hidden>
-<div class="consent-heading-row"><h2 id="consent-title">Privacy &amp; cookies</h2><span>VRAELIX</span></div>
+        submission_sentence = "The Request a Quote form is disabled here and does not send enquiry details."
+        details = "Form submission is disabled, so this version does not send or store enquiry details."
+        storage_detail = (
+            "localStorage stores your privacy preference; sessionStorage records your notice acknowledgement for this tab session."
+        )
+    summary = storage_sentence + " " + submission_sentence
+    return '''<aside class="consent-panel" data-consent-panel aria-labelledby="consent-title" aria-label="Privacy and cookie notice" role="region" hidden>
+<div class="consent-heading-row"><h2 id="consent-title">Privacy &amp; cookies</h2><button class="consent-close" type="button" data-consent-close aria-label="Close privacy and cookie notice">×</button></div>
 <p>''' + esc(summary) + ''' Read our <a href="/privacy/">Privacy Policy</a> and <a href="/cookie-policy/">Cookie Policy</a>.</p>
-<div class="consent-actions" data-consent-primary-actions><button class="consent-accept" type="button" data-consent-accept>''' + accept_label + '''</button><button class="consent-manage" type="button" data-consent-manage aria-expanded="false" aria-controls="consent-management">Manage preferences</button></div>
-<div class="consent-management" id="consent-management" data-consent-management hidden><p><strong>Essential storage</strong><span>''' + esc(storage_detail) + '''</span></p><p>''' + esc(details) + '''</p>''' + analytics_option + '''<div class="consent-actions"><button class="consent-accept" type="button" data-consent-save>Save preferences</button><button class="consent-manage" type="button" data-consent-back>Back</button></div></div>
+<div class="consent-actions" data-consent-primary-actions><button class="consent-accept" type="button" data-consent-accept>OK</button><button class="consent-manage" type="button" data-consent-manage aria-expanded="false" aria-controls="consent-management">Preferences</button></div>
+<div class="consent-management" id="consent-management" data-consent-management hidden><p><strong>Essential browser storage</strong><span>''' + esc(storage_detail) + '''</span></p><p>''' + esc(details) + '''</p>''' + analytics_option + '''<div class="consent-actions"><button class="consent-accept" type="button" data-consent-save>Save preferences</button><button class="consent-manage" type="button" data-consent-back>Back</button></div></div>
 </aside>'''
-
 def page_intro(section, label, heading, copy):
     return f'''<section class="page-hero" aria-labelledby="page-title"><div class="wrap page-hero-grid"><div><p class="eyebrow">{esc(section)} <span class="eyebrow-divider" aria-hidden="true">/</span> {esc(label)}</p><h1 id="page-title">{heading}</h1></div><div class="page-hero-side"><p>{copy}</p></div></div><div class="page-hero-rule" aria-hidden="true"></div></section>'''
 
@@ -363,14 +373,14 @@ def render_home():
 <div class="wrap hero-bottom"><span>A modern digital technology &amp; solutions brand</span><span class="hero-scroll">Scroll to explore <span aria-hidden="true">↓</span></span></div></section>
 <section class="intro-strip section"><div class="wrap intro-grid"><p class="eyebrow">The VRAELIX point of view</p><div><h2>Good technology starts with <em>understanding.</em></h2><p>We bring design, technology and business purpose together—so each digital decision has a reason to be there.</p><a class="text-link" href="/about/">More about VRAELIX <span aria-hidden="true">↗</span></a></div></div></section>
 <section class="section services-home" aria-labelledby="services-heading"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">What we do</p><h2 id="services-heading">Digital work,<br><em>with direction.</em></h2></div><p>Start with the business need. Find the right digital response. Build with room to grow.</p></div><div class="service-grid">{cards}</div><div class="section-foot"><a class="text-link" href="/services/">Explore all services <span aria-hidden="true">↗</span></a></div></div></section>
-<section class="section founder-home" aria-labelledby="founder-heading"><div class="wrap founder-grid"><div class="founder-photo-stack"><div class="founder-photo-pair"><img class="founder-main" src="/assets/founder-work.webp" alt="VRAELIX founder working at a laptop in a light-filled office" loading="lazy" width="1086" height="1448"><img class="founder-detail" src="/assets/founder-coffee.webp" alt="VRAELIX founder taking a quiet moment between work" loading="lazy" width="1086" height="1448"></div><span class="photo-caption">A considered start. A bigger direction.</span></div><div class="founder-copy"><p class="eyebrow">Ansh Kumar · Founder &amp; CEO</p><h2 id="founder-heading">Built with a clear point of <em>view.</em></h2><p>VRAELIX began with a simple belief: digital work should make sense for the business behind it. That means listening first, making thoughtful choices and building something useful for the people who rely on it.</p><p>Today, websites are an important part of that work. They are also a foundation for a wider set of digital, creative and technology solutions as real needs emerge.</p><a class="text-link" href="/about/">Our story <span aria-hidden="true">↗</span></a></div></div></section>
+<section class="section founder-home" aria-labelledby="founder-heading"><div class="wrap founder-grid"><div class="founder-photo-stack"><div class="founder-photo-pair"><img class="founder-main" src="/assets/founder-work.webp" alt="VRAELIX founder working at a laptop in a light-filled office" loading="lazy" width="1086" height="1448"><img class="founder-detail" src="/assets/founder-coffee.webp" alt="VRAELIX founder taking a quiet moment between work" loading="lazy" width="1086" height="1448"></div><span class="photo-caption">A considered start. A bigger direction.</span></div><div class="founder-copy"><p class="eyebrow">Ansh Kumar · Founder</p><h2 id="founder-heading">Built with a clear point of <em>view.</em></h2><p>VRAELIX began with a simple belief: digital work should make sense for the business behind it. That means listening first, making thoughtful choices and building something useful for the people who rely on it.</p><p>Today, websites are an important part of that work. They are also a foundation for a wider set of digital, creative and technology solutions as real needs emerge.</p><a class="text-link" href="/about/">Our story <span aria-hidden="true">↗</span></a></div></div></section>
 <section class="section process-preview" aria-labelledby="process-heading"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">How we work</p><h2 id="process-heading">A thoughtful route<br>from need to <em>next step.</em></h2></div><a class="text-link" href="/process/">Explore the process <span aria-hidden="true">↗</span></a></div><div class="steps-grid"><article class="step"><span>01</span><h3>Understand</h3><p>Start with the people, context and business need behind the request.</p></article><article class="step"><span>02</span><h3>Shape</h3><p>Agree the right scope, priorities and practical path forward.</p></article><article class="step"><span>03</span><h3>Build</h3><p>Make, review and refine the experience with care and clarity.</p></article><article class="step"><span>04</span><h3>Move forward</h3><p>Launch with a clear handover and space for what comes next.</p></article></div></div></section>
 <section class="section insight-preview" aria-labelledby="insight-heading"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">Notes for better decisions</p><h2 id="insight-heading">A clearer view of<br><em>digital work.</em></h2></div><a class="text-link" href="/insights/">Visit insights <span aria-hidden="true">↗</span></a></div><div class="insight-grid">{insight_cards}</div></div></section>
 {cta_band("The next step","Let’s make the brief clearer.","Tell us what you are trying to improve or build. We’ll start with the need and shape the right conversation.")}'''
 
 def render_about():
     return page_intro("VRAELIX", "About", "Technology with a<br><em>human point of view.</em>", "VRAELIX is a modern digital technology and solutions brand. We build thoughtful digital experiences and business systems around real business needs.") + '''<section class="section about-intro"><div class="wrap split-copy"><p class="eyebrow">Why VRAELIX exists</p><div><h2>Make the digital part<br>of business feel <em>clearer.</em></h2><p>Digital projects can become complicated before they become useful. VRAELIX starts with the people and the problem, then finds a considered way to make progress.</p><p>Website development is a core part of our work today. The wider direction is to support businesses with the creative, technical and operational solutions their needs call for—built carefully, one useful step at a time.</p></div></div></section>
-<section class="section founder-story"><div class="wrap founder-story-grid"><div class="founder-story-copy"><p class="eyebrow">A note from the founder</p><h2>A practical idea,<br>a wider <em>horizon.</em></h2><p>Ansh Kumar is the Founder &amp; CEO of VRAELIX.</p><p>VRAELIX is being built around a simple principle: good digital work is grounded in business purpose. A website, an automation or a custom tool should have a clear role in the way people discover, understand or operate a business.</p><p>That principle is the starting point for every conversation. It keeps the work focused on what matters now while leaving room for what may be useful next.</p><a class="text-link" href="/request-a-quote/">Start a project <span aria-hidden="true">↗</span></a></div><div class="founder-story-photos"><figure><img src="/assets/founder-profile.webp" alt="VRAELIX founder, shown in a natural portrait at the office" loading="lazy" width="1086" height="1448"><figcaption>VRAELIX · Founder</figcaption></figure><figure><img src="/assets/founder-coffee.webp" alt="VRAELIX founder at work with a cup of coffee" loading="lazy" width="1086" height="1448"><figcaption>Thoughtful work, built around real needs</figcaption></figure></div></div></section>
+<section class="section founder-story"><div class="wrap founder-story-grid"><div class="founder-story-copy"><p class="eyebrow">A note from the founder</p><h2>A practical idea,<br>a wider <em>horizon.</em></h2><p>Ansh Kumar is the Founder of VRAELIX.</p><p>VRAELIX is being built around a simple principle: good digital work is grounded in business purpose. A website, an automation or a custom tool should have a clear role in the way people discover, understand or operate a business.</p><p>That principle is the starting point for every conversation. It keeps the work focused on what matters now while leaving room for what may be useful next.</p><a class="text-link" href="/request-a-quote/">Start a project <span aria-hidden="true">↗</span></a></div><div class="founder-story-photos"><figure><img src="/assets/founder-profile.webp" alt="VRAELIX founder, shown in a natural portrait at the office" loading="lazy" width="1086" height="1448"><figcaption>VRAELIX · Founder</figcaption></figure><figure><img src="/assets/founder-coffee.webp" alt="VRAELIX founder at work with a cup of coffee" loading="lazy" width="1086" height="1448"><figcaption>Thoughtful work, built around real needs</figcaption></figure></div></div></section>
 <section class="section principles"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">What guides the work</p><h2>Four things we<br>keep <em>in view.</em></h2></div></div><div class="principle-grid"><article><span>01</span><h3>Purpose before tools</h3><p>Begin with the outcome people need, then choose the technology that fits.</p></article><article><span>02</span><h3>Clarity in the details</h3><p>Make the message, structure and next action easier to understand.</p></article><article><span>03</span><h3>Care in the craft</h3><p>Consider the experience across screens, content and everyday use.</p></article><article><span>04</span><h3>Room to evolve</h3><p>Build a foundation that can accommodate new needs over time.</p></article></div></div></section>''' + cta_band("A good place to begin", "Start with the business need.", "Share the idea, challenge or opportunity you have in mind.")
 
 def render_services():
@@ -451,7 +461,14 @@ def render_thankyou():
 
 def render_legal(slug):
     title, sections = DATA["legal"][slug]
-    if IS_STAGING_PREVIEW and slug == "privacy":
+    form_submission_active = (
+        (ENQUIRY_BACKEND_VERIFIED or STAGING_FORM_TEST_MODE)
+        and (
+            bool(SUPABASE_PROJECT_URL and SUPABASE_PUBLISHABLE_KEY and TURNSTILE_SITE_KEY)
+            if ENQUIRY_BACKEND == "supabase" else bool(ZAPIER_WEBHOOK_URL)
+        )
+    )
+    if IS_STAGING_PREVIEW and form_submission_active and slug == "privacy":
         staging_sections = {
             "How information is handled": (
                 "In this Staging preview, the Request a Quote form sends the details you enter to the Staging "
@@ -489,15 +506,17 @@ def render_legal(slug):
             ),
         }
         sections = [(head, staging_sections.get(head, text)) for head, text in sections]
-    elif IS_STAGING_PREVIEW and slug == "cookie-policy":
+    elif IS_STAGING_PREVIEW and form_submission_active and slug == "cookie-policy":
         staging_sections = {
             "Cookies and browser storage": (
-                "This Staging preview uses localStorage to remember the privacy preference and, after a successful "
-                "enquiry, sessionStorage to keep a temporary copy for the Thank You page. No analytics measurement "
-                "ID is configured in this Staging build, so it does not load an analytics tag or set analytics or "
-                "advertising cookies. The quote form loads Cloudflare Turnstile to request a verification token; the "
-                "widget code does not request pre-clearance; Cloudflare account-level settings and other "
-                "provider-controlled browser processing have not been independently verified."
+                "Essential browser storage uses localStorage for privacy preferences and sessionStorage for notice "
+                "acknowledgement and, after successful submission, a temporary confirmation copy. The notice remains "
+                "visible on each page load until you choose OK, close it, press Escape, or open Preferences and save "
+                "a choice; it appears again in a new tab session and the footer settings control reopens it. No analytics "
+                "or marketing cookies "
+                "are active unless you opt into optional Google Analytics 4 when measurement is configured. The "
+                "form uses Cloudflare Turnstile; the widget code does not request pre-clearance. Account-level "
+                "settings and other provider-controlled browser processing have not been independently verified."
             ),
             "Enquiry submission": (
                 "In this Staging preview, the browser sends the form fields and Turnstile token to the Staging "
@@ -520,59 +539,81 @@ def render_legal(slug):
             ),
         }
         sections = [(head, staging_sections.get(head, text)) for head, text in sections]
-    elif not ENQUIRY_BACKEND_VERIFIED and not STAGING_FORM_TEST_MODE and slug == "privacy":
+    else:
         analytics_summary = (
-            " Optional Google Analytics 4 measurement is available only after you opt in through the privacy preferences."
+            " Optional Google Analytics 4 is loaded only after you opt into analytics preferences."
             if GA4_MEASUREMENT_ID else
-            " The site uses essential browser storage for the privacy preference; no analytics or advertising pixels are active."
+            " No analytics or marketing cookies are active."
         )
-        disabled_form_text = (
-            "The Request a Quote form is disabled in this build and does not submit entries from this build. "
-            "The reviewed Staging preview uses Supabase for enquiry submission, with Cloudflare Turnstile and "
-            "Upstash rate limiting. Production processing has not been verified."
-        ) + analytics_summary
-        sections = [(head, disabled_form_text if head == "How information is handled" else text) for head,text in sections]
-        sections = [(head, "This build does not submit enquiry entries. In the reviewed Staging preview, Supabase, Cloudflare Turnstile and Upstash are used for enquiry processing and rate limiting; Production processing has not been verified." if head == "Third-party processing" else text) for head,text in sections]
-        sections = [(head, "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are kept as long as needed for the work and business records. You can ask to access or delete an enquiry through the contact page or at vraelix29@gmail.com; VRAELIX aims to respond within 30 days. Automatic deletion and backup retention settings have not been verified." if head == "Retention and requests" else text) for head,text in sections]
-    elif not ENQUIRY_BACKEND_VERIFIED and not STAGING_FORM_TEST_MODE and slug == "cookie-policy":
-        analytics_summary = (
-            " Optional Google Analytics 4 is loaded only if you grant analytics consent."
-            if GA4_MEASUREMENT_ID else
-            " This site does not set analytics, advertising or personalisation cookies."
-        )
-        sections = [(head, "This build uses localStorage to remember the privacy preference. It does not accept new enquiries here; successful submissions in the reviewed Staging preview use temporary sessionStorage for the Thank You page." + analytics_summary if head == "Cookies and browser storage" else text) for head,text in sections]
-        sections = [(head, "The Request a Quote form is disabled in this build. In the reviewed Staging preview, the browser sends the enquiry fields and Turnstile token to the Supabase Edge Function, which validates and inserts accepted enquiries." if head == "Enquiry submission" else text) for head,text in sections]
-        sections = [(head, "This build does not submit form entries. The reviewed Staging preview uses Supabase, Cloudflare Turnstile and Upstash Redis for enquiry processing and rate limiting. External LinkedIn and Instagram links follow those providers’ own policies; Production behavior is unverified." if head == "Third-party services" else text) for head,text in sections]
-        sections = [(head, "VRAELIX keeps enquiries for up to 12 months. If an enquiry becomes a project, related records are kept as long as needed for the work and business records. For access or deletion requests, use the contact page or email vraelix29@gmail.com; VRAELIX aims to respond within 30 days. Automatic deletion and backup retention settings have not been verified." if head == "Retention" else text) for head,text in sections]
-    if not IS_STAGING_PREVIEW and GA4_MEASUREMENT_ID and slug == "privacy":
-        form_text = (
-            "When you submit the Request a Quote form, your browser sends the enquiry details to Zapier, which VRAELIX uses to route records to Google Sheets."
-            if ZAPIER_WEBHOOK_URL else
-            "The Request a Quote form is not connected in this build and does not transmit enquiry entries."
-        )
-        analytics_text = form_text + " Optional Google Analytics 4 measures general site usage only if you opt in through privacy preferences. The Google tag is not loaded before consent; Google processes opted-in analytics under its own terms and privacy practices. You can withdraw consent later in the footer settings."
-        sections = [(head, analytics_text if head == "How information is handled" else text) for head,text in sections]
-        processing_text = (
-            "Zapier processes submitted enquiry details for routing to Google Sheets. Optional Google Analytics 4 is loaded only after analytics consent and measures site usage. Google handles analytics data under its own privacy practices."
-            if ZAPIER_WEBHOOK_URL else
-            "Optional Google Analytics 4 is loaded only after analytics consent and measures site usage. Google handles analytics data under its own privacy practices."
-        )
-        sections = [(head, processing_text if head == "Third-party processing" else text) for head,text in sections]
-    if not IS_STAGING_PREVIEW and GA4_MEASUREMENT_ID and slug == "cookie-policy":
-        sections = [(head, "Essential browser storage remembers your privacy choice and sessionStorage temporarily holds a submitted brief for the confirmation page. If you choose optional analytics, Google Analytics 4 may set first-party cookies such as _ga to distinguish visits. Analytics does not load before consent, and you can change your choice in the footer settings." if head == "Cookies and browser storage" else text) for head,text in sections]
-        third_party_cookie_text = (
-            "Zapier and Google process submitted enquiry information under their own terms and privacy practices. Google Analytics 4 is activated only after optional analytics consent and may set first-party analytics cookies."
-            if ZAPIER_WEBHOOK_URL else
-            "Google Analytics 4 is activated only after optional analytics consent and may set first-party analytics cookies."
-        )
-        sections = [(head, third_party_cookie_text if head == "Third-party services" else text) for head,text in sections]
+        if slug == "privacy":
+            if form_submission_active and ENQUIRY_BACKEND == "supabase":
+                handling = (
+                    "The Request a Quote form sends the details you enter to VRAELIX’s Supabase Edge Function. "
+                    "The function validates the request, verifies Cloudflare Turnstile and applies rate limiting "
+                    "before storing an accepted enquiry in the Supabase database."
+                )
+                processing = (
+                    "Supabase processes the form request and stores accepted enquiries. Cloudflare Turnstile "
+                    "verifies the bot-check token, and Upstash Redis supports rate limiting."
+                )
+            elif form_submission_active:
+                handling = "The Request a Quote form sends submitted details to VRAELIX through its configured enquiry service."
+                processing = "The configured enquiry service processes submitted details for VRAELIX."
+            else:
+                handling = "The Request a Quote form is disabled here and does not submit enquiry details."
+                processing = (
+                    "This version submits no enquiries. The reviewed Staging implementation uses Supabase, "
+                    "Cloudflare Turnstile and Upstash Redis when its form is enabled."
+                )
+            handling += analytics_summary
+            sections = [
+                (head, handling if head == "How information is handled" else
+                 "Essential browser storage uses localStorage for privacy and optional analytics preferences and "
+                 "sessionStorage for notice acknowledgement and temporary confirmation copy after a successful enquiry. "
+                 "The notice remains visible on each page load until you choose OK, close it, press Escape, or open "
+                 "Preferences and save a choice; it appears again in a new tab session and can be reopened from the footer."
+                 if head == "Browser storage and confirmation" else
+                 processing if head == "Third-party processing" else text)
+                for head, text in sections
+            ]
+        elif slug == "cookie-policy":
+            storage_text = (
+                "Essential browser storage uses localStorage for privacy and optional analytics preferences and "
+                "sessionStorage for notice acknowledgement and, after a successful enquiry, a temporary confirmation copy. "
+                "The notice remains visible on each page load until you choose OK, close it, press Escape, or open "
+                "Preferences and save a choice; it appears again in a new tab session and the footer settings control reopens it. "
+                + analytics_summary
+            )
+            if form_submission_active and ENQUIRY_BACKEND == "supabase":
+                submission_text = (
+                    "The form sends its fields and Turnstile token to the Supabase Edge Function. The function "
+                    "validates the request, verifies the token and applies rate limiting before inserting an "
+                    "accepted enquiry into the Supabase database."
+                )
+                services_text = (
+                    "Supabase processes and stores accepted enquiries, Cloudflare Turnstile verifies the bot-check "
+                    "token, and Upstash Redis supports rate limiting."
+                )
+            elif form_submission_active:
+                submission_text = "The form sends submitted details to VRAELIX through its configured enquiry service."
+                services_text = "The configured enquiry service processes submitted details for VRAELIX."
+            else:
+                submission_text = "The Request a Quote form is disabled here and does not submit enquiry details."
+                services_text = (
+                    "This version submits no form entries. The reviewed Staging implementation uses Supabase, "
+                    "Cloudflare Turnstile and Upstash Redis when its form is enabled."
+                )
+            sections = [
+                (head, storage_text if head == "Cookies and browser storage" else
+                 submission_text if head == "Enquiry submission" else
+                 services_text if head == "Third-party services" else text)
+                for head, text in sections
+            ]
     blocks = []
     for head,text in sections:
         paragraph = esc(text)
         if slug in ("privacy", "cookie-policy") and head in ("Third-party processing", "Third-party services"):
             provider_links = []
-            if ZAPIER_WEBHOOK_URL:
-                provider_links.append('<a href="https://zapier.com/privacy" target="_blank" rel="noopener noreferrer">Zapier Privacy Policy</a>')
             if GA4_MEASUREMENT_ID:
                 provider_links.append('<a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a>')
             if IS_STAGING_PREVIEW and head in ("Third-party processing", "Third-party services"):
@@ -581,7 +622,7 @@ def render_legal(slug):
                 paragraph += " Review " + " and ".join(provider_links) + "."
         blocks.append(f'<h2>{esc(head)}</h2><p>{paragraph}</p>')
     content = "".join(blocks)
-    reviewed = "17 October 2026" if slug in ("privacy", "cookie-policy") else "8 October 2026"
+    reviewed = "18 October 2026" if slug in ("privacy", "cookie-policy") else "8 October 2026"
     intro = (
         "This page explains how VRAELIX handles enquiry information, browser storage and related services."
         if slug in ("privacy", "cookie-policy") else

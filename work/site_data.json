@@ -262,8 +262,8 @@
     ],
     [
       "/thank-you/",
-      "Thank You | VRAELIX Project Brief",
-      "Your VRAELIX project brief is ready. Review it and continue through a verified contact channel to send your enquiry.",
+      "Thank You | VRAELIX",
+      "Thank you for contacting VRAELIX.",
       "thank"
     ],
     [
@@ -376,7 +376,7 @@
         ],
         [
           "Privacy preference",
-          "The privacy preference is stored in browser localStorage so the notice does not appear on every page load. It contains no personal information. You can reopen the notice from the footer at any time."
+          "The notice appears on each page load until you choose OK, close it, press Escape, or open Preferences and save a choice. It appears again in a new tab session. sessionStorage records your acknowledgement for the current tab session; the localStorage preference does not suppress the notice. You can reopen it from the footer at any time."
         ],
         [
           "External contact services",
@@ -414,11 +414,11 @@
       [
         [
           "Cookies and browser storage",
-          "This Staging preview uses localStorage to remember the privacy preference and, after a successful enquiry, sessionStorage to keep a temporary copy for the Thank You page. No analytics measurement ID is configured in this Staging build, so it does not load an analytics tag or set analytics or advertising cookies. The quote form loads Cloudflare Turnstile to request a verification token. The widget code does not request pre-clearance; Cloudflare account-level settings and other provider-controlled browser processing have not been independently verified."
+          "Essential browser storage uses localStorage for privacy and optional analytics preferences and sessionStorage for notice acknowledgement and a temporary confirmation copy after a successful enquiry. The notice remains visible on each page load until you choose OK, close it, press Escape, or open Preferences and save a choice; it appears again in a new tab session and can be reopened from the footer. Analytics and marketing cookies stay off unless you opt into analytics in Preferences. The form loads Cloudflare Turnstile to request a verification token. The widget code does not request pre-clearance; account-level settings and other provider-controlled browser processing have not been independently verified."
         ],
         [
           "Privacy preference",
-          "The preference stores only an essential-only setting so the notice does not appear on every page load. It contains no personal information. You can reopen the notice from the footer to review the current settings."
+          "The notice appears on each page load until you choose OK, close it, press Escape, or open Preferences and save a choice. It appears again in a new tab session. sessionStorage records your acknowledgement for the current tab session; localStorage records privacy and optional analytics preferences but does not suppress the notice. Reopen it at any time from the footer."
         ],
         [
           "Enquiry submission",
