@@ -6,6 +6,51 @@
     const route = String(path || "/").startsWith("/") ? String(path || "/") : "/" + String(path || "");
     return base + route || "/";
   };
+  const showBrandIntro = () => {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+    let shouldShow = true;
+    try {
+      if (sessionStorage.getItem("vraelix-brand-intro-shown-v1") === "true") shouldShow = false;
+      else sessionStorage.setItem("vraelix-brand-intro-shown-v1", "true");
+    } catch (_) {}
+    if (!shouldShow) return Promise.resolve();
+    return new Promise((resolve) => {
+      const intro = document.createElement("div");
+      intro.className = "vraelix-brand-intro";
+      intro.setAttribute("aria-hidden", "true");
+      const logo = document.createElement("img");
+      logo.src = sitePath("/assets/brand/vraelix-logo-white.png");
+      logo.alt = "";
+      logo.width = 1490;
+      logo.height = 613;
+      intro.append(logo);
+      let finished = false;
+      let leaving = false;
+      let holdTimer = null;
+      let exitTimer = null;
+      const removeIntro = () => {
+        if (finished) return;
+        finished = true;
+        if (holdTimer !== null) window.clearTimeout(holdTimer);
+        if (exitTimer !== null) window.clearTimeout(exitTimer);
+        document.removeEventListener("keydown", skipIntro);
+        intro.remove();
+        resolve();
+      };
+      const finishIntro = () => {
+        if (finished || leaving) return;
+        leaving = true;
+        intro.classList.add("is-leaving");
+        exitTimer = window.setTimeout(removeIntro, 450);
+      };
+      const skipIntro = () => finishIntro();
+      intro.addEventListener("click", skipIntro);
+      document.addEventListener("keydown", skipIntro);
+      document.body.append(intro);
+      holdTimer = window.setTimeout(finishIntro, 1750);
+    });
+  };
+  const brandIntroFinished = showBrandIntro();
   document.documentElement.classList.add("has-js");
 
   const video = document.querySelector(".hero__video");
@@ -304,7 +349,7 @@
         closePanel();
       }
     });
-    updateAutoNotice();
+    brandIntroFinished.then(updateAutoNotice);
   }
   const icons = {
     linkedin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM3.56 9h3.56v11.45H3.56V9Z"/></svg>',
@@ -614,8 +659,79 @@
     actions.replaceChildren(link);
   }
 
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const planCards = document.querySelectorAll("[data-plan-card]");
+  if (planCards.length && "IntersectionObserver" in window && !reducedMotion) {
+    const planObserver = new IntersectionObserver((entries, current) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          current.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -30px 0px" });
+    planCards.forEach((card, index) => {
+      card.style.setProperty("--plan-stagger", `${index * 120}ms`);
+      card.classList.add("plan-card-reveal");
+      planObserver.observe(card);
+    });
+  }
+
+  document.querySelectorAll("[data-services-slider]").forEach((slider) => {
+    const track = slider.querySelector("[data-services-track]");
+    const cards = Array.from(slider.querySelectorAll("[data-service-card]"));
+    const previous = slider.querySelector("[data-services-prev]");
+    const next = slider.querySelector("[data-services-next]");
+    if (!track || !cards.length || !previous || !next) return;
+    slider.classList.add("is-enhanced");
+    previous.hidden = false;
+    next.hidden = false;
+    let centeredIndex = 0;
+    let updateQueued = false;
+    const updateSlider = () => {
+      const trackRect = track.getBoundingClientRect();
+      const center = trackRect.left + track.clientWidth / 2;
+      let nearestDistance = Infinity;
+      cards.forEach((card, index) => {
+        const rect = card.getBoundingClientRect();
+        const distance = Math.abs(rect.left + rect.width / 2 - center);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          centeredIndex = index;
+        }
+      });
+      cards.forEach((card, index) => card.classList.toggle("is-centered", index === centeredIndex));
+      previous.disabled = centeredIndex <= 0;
+      next.disabled = centeredIndex >= cards.length - 1;
+      updateQueued = false;
+    };
+    const queueSliderUpdate = () => {
+      if (updateQueued) return;
+      updateQueued = true;
+      window.requestAnimationFrame(updateSlider);
+    };
+    const scrollToCard = (index) => {
+      const targetIndex = Math.max(0, Math.min(cards.length - 1, index));
+      const target = cards[targetIndex];
+      const trackRect = track.getBoundingClientRect();
+      const cardRect = target.getBoundingClientRect();
+      const left = track.scrollLeft + cardRect.left - trackRect.left - (track.clientWidth - cardRect.width) / 2;
+      track.scrollTo({ left, behavior: reducedMotion ? "auto" : "smooth" });
+    };
+    previous.addEventListener("click", () => scrollToCard(centeredIndex - 1));
+    next.addEventListener("click", () => scrollToCard(centeredIndex + 1));
+    track.addEventListener("scroll", queueSliderUpdate, { passive: true });
+    track.addEventListener("keydown", (event) => {
+      if (event.target !== track || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+      event.preventDefault();
+      scrollToCard(centeredIndex + (event.key === "ArrowRight" ? 1 : -1));
+    });
+    window.addEventListener("resize", queueSliderUpdate, { passive: true });
+    updateSlider();
+  });
+
   const revealItems = document.querySelectorAll(".section-heading,.intro-grid,.split-copy,.founder-grid,.founder-story-grid,.steps-grid,.insight-card,.process-row,.principle-grid article,.faq-item,.service-main,.service-detail-grid,.contact-grid,.faq-layout,.quote-form-wrap");
-  if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if ("IntersectionObserver" in window && !reducedMotion) {
     const observer = new IntersectionObserver((entries, current) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
