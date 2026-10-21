@@ -231,23 +231,13 @@
     };
     if (savedChoice) applyAnalytics(savedChoice.analytics);
 
-    const updateReservedSpace = () => {
-      if (consentPanel.hidden) {
-        document.body.classList.remove("consent-notice-open");
-        document.body.style.removeProperty("--consent-notice-space");
-        return;
-      }
-      const panelHeight = Math.ceil(consentPanel.getBoundingClientRect().height);
-      document.body.style.setProperty("--consent-notice-space", `${panelHeight + 24}px`);
-      document.body.classList.add("consent-notice-open");
-    };
+
     const showManagement = (show, moveFocus) => {
       management.hidden = !show;
       consentPanel.classList.toggle("is-managing", show);
       manageButton.setAttribute("aria-expanded", String(show));
       if (analyticsInput) analyticsInput.checked = Boolean(savedChoice && savedChoice.analytics);
       if (moveFocus) (show ? saveButton : manageButton).focus({ preventScroll: true });
-      window.requestAnimationFrame(updateReservedSpace);
     };
     const acknowledgeNotice = () => {
       autoNoticePending = false;
@@ -255,7 +245,6 @@
     };
     const updateAutoNotice = () => {
       if (manualNoticeOpen) {
-        updateReservedSpace();
         return;
       }
       if (autoNoticePending) {
@@ -265,7 +254,6 @@
         consentPanel.hidden = true;
         autoNoticeVisible = false;
       }
-      updateReservedSpace();
     };
     const closePanel = () => {
       consentPanel.hidden = true;
@@ -273,7 +261,6 @@
       manualNoticeOpen = false;
       autoNoticeVisible = false;
       acknowledgeNotice();
-      updateReservedSpace();
       const target = externalTrigger || (consentPanel.contains(document.activeElement) ? returnFocus : null);
       externalTrigger = null;
       returnFocus = null;
@@ -317,7 +304,6 @@
         closePanel();
       }
     });
-    window.addEventListener("resize", updateReservedSpace);
     updateAutoNotice();
   }
   const icons = {
